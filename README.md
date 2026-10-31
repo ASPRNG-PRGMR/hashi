@@ -4,7 +4,7 @@
 
 A Linux host implementation that speaks Splashtop's wired display protocol — letting an unmodified iPad running the Splashtop app work as a real extended or mirrored display for a Linux machine over USB, the way Splashtop's own Windows/macOS host works today.
 
-HASHI (橋, "bridge") is a clean-room, interoperability-motivated project. No Splashtop code, binaries, or proprietary assets are used or redistributed — only observed protocol behavior, documented Microsoft/Apple platform APIs, and standard Linux kernel interfaces.
+HASHI (橋, "bridge") is an interoperability-motivated reverse-engineering project. No Splashtop code, binaries, or proprietary assets are used or redistributed — only observed protocol behavior, documented Microsoft/Apple platform APIs, and standard Linux kernel interfaces. (It is not a formal two-team clean room; see the devlog's 2026-10-14 notes.)
 
 ## Why This Project Exists
 
@@ -23,18 +23,20 @@ The goal is not to clone Splashtop's software — it's to speak its wire protoco
 
 ## Current Status — Read This First When Resuming
 
-**Phase 0 (Windows host architecture discovery) is mostly complete.** The active work is preparing a labeled reference binary for diffing against Splashtop's real driver — no disassembly of `lci_iddcx.dll` has started yet.
+**Phase 0 (Windows host architecture discovery) is mostly complete.** As of 2026-10-14 the active work is a **prerequisite-skills phase** (x64 assembly and Windows reversing) before any disassembly of `lci_iddcx.dll`. The ordered study plan and exercises are in [`docs/study-plan-x64-windows-reversing.md`](docs/study-plan-x64-windows-reversing.md) and [`study/`](study/). Week 1 is defined; Weeks 2–4 are outlines.
+
+**Corrections made on resumption (2026-10-14, details in the devlog):** `IddCx0102` in the INF does not pin IddCx 1.2 (the current Windows 11 sample uses the same value); BinExport's Ghidra extension is stale for Ghidra 12 so diffing starts with Ghidra's built-in Version Tracking; `AppleSSD.sys` is a Boot Camp storage driver unrelated to the iPad link; and the wire protocol HASHI must reproduce lives in the Splashtop host agent and the USB traffic, not in the IddCx driver, so Phase 1 capture outranks Phase 0.75 diffing.
 
 **What's confirmed:**
 - Splashtop rides on Apple's own communication stack (Apple Mobile Device Service, Bonjour) for USB/iPad connectivity — not a proprietary USB layer of its own.
-- Extended Display is powered by `lci_iddcx.dll`, a **UMDF (user-mode) driver** loaded via `WUDFRd`, built on Microsoft's **IddCx** framework at version `IddCx0102` specifically.
+- Extended Display is powered by `lci_iddcx.dll`, a **UMDF (user-mode) driver** loaded via `WUDFRd`, built on Microsoft's **IddCx** framework (INF binding `IddCx0102`; the actual IddCx API level is set at build time and is most likely 1.3 or earlier given the December 2018 build date — inference).
 - A second file, `lci_proxywddm.sys`, is a real kernel-mode driver ("LuminonCore WDDM PROXY") — its exact role is still unknown.
 - `IndirectKmd` (Microsoft's kernel component) activates because `lci_iddcx.inf` declares it via `UpperFilters` — fully explained, no longer a mystery.
 - The real frame handoff point, per Microsoft's own IddCx documentation, is the `EvtIddCxMonitorAssignSwapChain` callback.
 - `lci_iddcx.dll` is very likely a **console IDD**, not a remote-session IDD (inference, not yet confirmed in the binary).
-- The diffing toolchain has been corrected once already: **Diaphora is IDA-only** as of 2026 with no working Ghidra support despite years "in development." The correct free tool for Ghidra is **BinDiff + BinExport** (Google, free, Apache-licensed).
+- The diffing toolchain has been corrected twice: **Diaphora is IDA-only** as of 2026, and **BinExport's prebuilt Ghidra extension stops at Ghidra 11.0.3** (open protobuf-mismatch bug). First pass is Ghidra 12's built-in Version Tracking and BSim; BinDiff only if BinExport builds against the installed Ghidra.
 
-**What's in progress right now:** installing the Visual Studio / Windows SDK / WDK toolchain needed to build Microsoft's official IDDCX sample driver with full debug symbols (PDB), to use as a labeled ground-truth baseline. See [`docs/driver-build-setup.md`](docs/driver-build-setup.md).
+**What's in progress right now:** Week 1 of the study plan (reading x64 from self-compiled C in Ghidra). After that: install the Visual Studio / Windows SDK / WDK toolchain in the existing GNOME Boxes `win11` VM and build Microsoft's IDDCX sample as Release + PDB and Debug + PDB. See [`docs/driver-build-setup.md`](docs/driver-build-setup.md).
 
 **Not started yet:**
 - Enabling IddCx frame capture or WPP tracing against the real Splashtop host (documented, ready to run).
@@ -60,6 +62,7 @@ This discipline prevents assumptions from silently becoming "facts" as the inves
 | [`docs/iddcx-reference.md`](docs/iddcx-reference.md) | Distilled reference on Microsoft's IddCx framework: object lifecycle, console vs. remote IDD modes, and the registry-driven debug facilities (frame capture, WPP tracing) that expose ground-truth data without disassembly. |
 | [`docs/driver-build-setup.md`](docs/driver-build-setup.md) | Why and how to build Microsoft's sample IDD driver with debug symbols — toolchain requirements, PDB explanation, setup checklist. **Current active work.** |
 | [`docs/reverse-engineering-methodology.md`](docs/reverse-engineering-methodology.md) | Full binary-diffing and driver-analysis workflow: Ghidra + BinDiff setup, how to identify vendor-added code, how to trace host↔driver IPC, and how findings get replaced with open-source Linux code without ever porting Splashtop's own code. |
+| [`docs/study-plan-x64-windows-reversing.md`](docs/study-plan-x64-windows-reversing.md) | Prerequisite-skills plan: x64 assembly and Windows reversing scoped to reading a UMDF/IddCx driver. What to learn, what to skip, day-by-day Week 1 with check questions, outlines for Weeks 2–4, cheat sheets. Exercises in [`study/`](study/). **Current active work.** |
 
 ## Current Architecture (Windows host, as understood so far)
 
@@ -122,26 +125,37 @@ This discipline prevents assumptions from silently becoming "facts" as the inves
 - [x] Study Microsoft's IddCx framework documentation (object lifecycle, console vs. remote modes, debug tooling)
 - [ ] Enable IddCx frame capture against the real Splashtop host — capture real frame data
 - [ ] Capture WPP trace across mirror mode and extended-display mode — diff DDI call sequences
-- [ ] Confirm IddCx version target (`IddCxGetVersion`) against Microsoft's version table
+- [ ] Confirm IddCx version target (`IDDCX_MINIMUM_VERSION_REQUIRED` embedded in the binary, or `IddCxGetVersion` use) against Microsoft's version table — `IddCx0102` in the INF is not the answer (see devlog C1)
+- [ ] Re-run `driverquery /v` for the Apple Mobile Device USB driver (`USBAAPL64.sys` or successor); drop `AppleSSD.sys` from the USB-side inventory
+- [ ] Identify the host agent process (reported as `SWXDAgent.exe` by third-party guides; verify) and list its loaded DLLs and open handles
 - [ ] Inspect `lci_proxywddm.inf` package to determine the kernel driver's actual responsibility
 - [ ] Trace process interactions (Process Monitor/Process Explorer) between host app, `lci_iddcx.dll`, `lci_proxywddm.sys`
 
-### Phase 0.5 — Reference Binary Preparation *(current focus)*
-- [ ] Install Visual Studio 2022 Community, Windows SDK, Windows Driver Kit (version matched to IddCx 1.2)
+### Phase 0.25 — Prerequisite Skills *(current focus, started 2026-10-14)*
+- [ ] Week 1: x64 reading from own compiled C (Ghidra 12.1.4 on Fedora, MinGW-built PE binaries) — `study/week1/`
+- [ ] Week 2: PE format, MSVC idioms, C++ objects, Windows API calls; TryHackMe "Windows x64 Assembly" then "Windows Reversing Intro"
+- [ ] Week 3: WDF/IddCx function-table and callback-table patterns; build and read the sample (overlaps Phase 0.5)
+- [ ] Week 4: first structured look at `lci_iddcx.dll` with the checklist in the study plan (overlaps Phase 0.75)
+
+### Phase 0.5 — Reference Binary Preparation
+- [ ] Install Visual Studio 2022 or 2026 Community, Windows SDK, current WDK, in the existing `win11` Boxes VM
 - [ ] Verify toolchain installation
 - [ ] Clone `Windows-driver-samples`, locate `video/IndirectDisplay/`
 - [ ] Inspect the sample project structure
-- [ ] Build the sample in Debug config with `/DEBUG` → produces `sample.dll` + PDB
+- [ ] Build the sample as **Release + PDB** (closest shape to the vendor binary) and **Debug + PDB** (easiest to read)
 
 ### Phase 0.75 — Binary Diffing
 - [ ] Import both sample driver (with PDB) and `lci_iddcx.dll` into Ghidra
-- [ ] Run Ghidra Version Tracking for a first-pass bulk match
-- [ ] Install BinDiff + BinExport, export both binaries, run full diff
+- [ ] Locate the WDF and IddCx function tables and the `IDD_CX_CLIENT_CONFIG` callback fill (names every DDI callback without diffing)
+- [ ] Run Ghidra Version Tracking for a first-pass bulk match; try BSim
+- [ ] BinDiff + BinExport only if BinExport builds against the installed Ghidra (prebuilt is stale; see devlog C3)
 - [ ] Bucket functions: framework glue (ignore) / partial match (priority) / unmatched (pure vendor code)
 - [ ] Open `lci_iddcx.dll` in Ghidra directly, informed by the diff results
 - [ ] Trace Splashtop host ↔ driver IPC mechanism (Process Monitor → Process Explorer → API Monitor → WinDbg as needed)
 
-### Phase 1 — Protocol Capture
+### Phase 1 — Protocol Capture *(higher priority than Phase 0.75; see devlog C5)*
+- [ ] Stop `usbmuxd` on the Fedora host, redirect the iPad into the `win11` VM (USB redirection, not VFIO), confirm the guest sees it
+- [ ] Capture raw USB traffic (Wireshark + usbmon on the Fedora host) during connect/pairing
 - [ ] Capture raw USB traffic (Wireshark + usbmon or equivalent) during mirror mode
 - [ ] Capture raw USB traffic during extended-display mode
 - [ ] Isolate control-channel framing from video-frame framing
@@ -181,8 +195,8 @@ This discipline prevents assumptions from silently becoming "facts" as the inves
 | Compositor integration | Wayland (wlroots-based first), X11/Xrandr as fallback |
 | Encode/decode | GStreamer or FFmpeg |
 | Protocol capture tooling | Wireshark, usbmon |
-| Driver reverse engineering | Ghidra, BinDiff/BinExport |
+| Driver reverse engineering | Ghidra 12 (Version Tracking, BSim); BinDiff/BinExport or ghidriff if they build against it |
 
 ## License & Scope Note
 
-This project does not include, redistribute, or depend on any Splashtop software, binaries, or proprietary protocol specifications. All findings are derived from independent observation of driver installation artifacts, publicly documented Microsoft platform APIs, and standard USB/display protocol analysis — in the same tradition as projects like Samba, Wine, and libimobiledevice.
+This project does not include, redistribute, or depend on any Splashtop software, binaries, or proprietary protocol specifications. All findings are derived from independent observation of driver installation artifacts, publicly documented Microsoft platform APIs, and standard USB/display protocol analysis — in the same tradition as projects like Samba, Wine, and libimobiledevice. Raw captures (USB, WPP traces, frame dumps, pairing records) are never committed; only derived, described behavior is published.

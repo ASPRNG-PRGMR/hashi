@@ -19,11 +19,15 @@ Import both binaries into Ghidra as separate programs in the same project. For t
 2. Run the built-in correlators (Exact Match, Symbol Match, Function Hash) to bulk-match identical/near-identical functions — this is framework glue, deprioritize it.
 3. Whatever remains unmatched after this pass is the first candidate list for vendor-specific code.
 
-### Diffing path B — BinDiff + BinExport (recommended — stronger heuristics for partial matches)
+### Diffing path A′ — find the callback table first (no diffing needed)
 
-**Correction from earlier guidance:** Diaphora, sometimes recommended for this kind of work, is IDA-only — no working Ghidra support has ever shipped despite years of "in development" status. **BinDiff** (Google, free and open-source since 2016, Apache-licensed) is the correct free tool here — it ships a working Ghidra extension called BinExport.
+An IddCx driver must fill `IDD_CX_CLIENT_CONFIG` (a struct of DDI callback pointers, field order fixed by `iddcx.h`) and pass it to `IddCxDeviceInitConfig`; likewise `WDF_DRIVER_CONFIG` and the PnP/power callback struct for WDF. Framework calls go through per-version function tables (`WdfFunctions_02015` for UMDF 2.15, and the IddCx equivalent) with the driver-globals pointer in RCX. Locating those two tables and the config fill names every framework call and every DDI callback, including `EvtIddCxMonitorAssignSwapChain`, before any diff runs. Do this first; diffing then only has to cover what is left.
 
-1. Download the current BinDiff release from `github.com/google/bindiff/releases` — the Ghidra BinExport extension is bundled prebuilt.
+### Diffing path B — BinDiff + BinExport (only if it builds against your Ghidra)
+
+**Corrections (2026-10-14):** Diaphora remains IDA-only. BinDiff 8 is the current release, but its **prebuilt BinExport Ghidra extension stops at Ghidra 11.0.3** (April 2024), and google/binexport issue #144 (protobuf mismatch, `IllegalAccessError` on export) is open with activity through late 2025. With Ghidra 12.1.4 this path requires building BinExport's `java/` directory from source against the installed Ghidra and matching its protobuf version. Budget an afternoon; abandon if it fights back. Alternatives in order: Ghidra Version Tracking (path A), Ghidra BSim (built in), `ghidriff` (Python, pyghidra-based; check Ghidra 12 support first).
+
+1. Clone `github.com/google/binexport`, build the Ghidra extension from `java/` with `-PGHIDRA_INSTALL_DIR=...` per its README, matching protobuf to Ghidra's bundled version.
 2. In Ghidra: `File → Install Extensions...` → add the BinExport zip → restart Ghidra.
 3. Export both binaries: open each in Ghidra's CodeBrowser, `File → Export Program... → Binary BinExport (v2) for BinDiff`.
 4. Diff them:
@@ -42,6 +46,10 @@ Import both binaries into Ghidra as separate programs in the same project. For t
 Run Version Tracking first (free, instant, clears obvious matches) → then BinDiff for the harder partial matches it misses. Start reading from the lowest-similarity *matched* function nearest `EvtIddCxMonitorAssignSwapChain` in the call graph — matched-but-different gives a reference point; a cold unmatched function doesn't.
 
 ---
+
+### Priority note (2026-10-14)
+
+The wire protocol HASHI must reproduce is spoken by the Splashtop host agent process to the iPad app over Apple's USB multiplexing, not by `lci_iddcx.dll`. The driver only hands desktop frames to that agent, and `evdi` replaces it on Linux. Treat §1–§2 as (a) the learning vehicle for reading vendor binaries and (b) the way to answer "how do frames reach the agent and in what format". Phase 1 USB capture and §3 (agent ↔ driver IPC) come first on the critical path.
 
 ## 2. Identify what LuminonCore changed
 
@@ -83,7 +91,7 @@ If nothing above surfaces the mechanism, it's likely ALPC (`NtAlpcSendWaitReceiv
 
 ## 4. Replace pieces one-by-one with an open-source implementation
 
-**Key principle: never port or transcribe LuminonCore's actual code.** Only the *behavioral facts* learned from steps 1–3 (protocol shape, transport mechanism, frame format) carry over into HASHI's implementation. This is what keeps the project a legitimate clean-room interop effort rather than a copyright liability — the same line Samba, Wine, and libimobiledevice draw.
+**Key principle: never port or transcribe LuminonCore's or Splashtop's actual code.** Only the *behavioral facts* learned from steps 1–3 (protocol shape, transport mechanism, frame format) carry over into HASHI's implementation. This is what keeps the project a legitimate interoperability effort rather than a copyright liability — the same line Samba, Wine, and libimobiledevice draw. Two further rules: raw captures, traces and frame dumps stay out of the public repo; and the study notes describe behavior ("waits on two events with a 16 ms timeout"), never reproduce decompiled vendor source.
 
 Replacement order, matching the phase roadmap in the project README:
 

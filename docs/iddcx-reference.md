@@ -123,9 +123,13 @@ This is the most actionable section for HASHI's methodology: these are OS-level,
 
 **Fact:** IddCx has its own version scheme (`IddCxGetVersion`), independent of the Windows build number, with compatibility ranges published by Microsoft. A driver built against IddCx 1.4+ can use runtime feature-detection macros (`IDD_IS_FUNCTION_AVAILABLE`, `IDD_IS_FIELD_AVAILABLE`) to support multiple Windows versions from one binary.
 
-**Inference:** `lci_iddcx.inf`'s `UmdfExtensions = IddCx0102` (per the original devlog) pins the driver to IddCx 1.2 specifically — an older, narrower feature set than current versions. Worth cross-referencing against the IddCx version/feature table when deciding which parts of *this* reference apply to Splashtop's actual driver vs. which are newer-version-only features it can't use.
+**Corrected 2026-10-14.** The earlier inference that `UmdfExtensions = IddCx0102` pins the driver to IddCx 1.2 was wrong.
 
-**Status:** Inference — confirm by checking which IddCx version corresponds to `IddCxGetVersion` value `0102` against Microsoft's version table, and treat any feature introduced in a later IddCx version as *not present* in Splashtop's driver.
+**Fact:** Microsoft's current sample INF, which targets Windows 11, declares the same `IddCx0102`. The value is the UMDF class-extension binding, constant across IddCx versions.
+**Fact:** The IddCx API level is fixed at build time by the WDK headers and `IDDCX_MINIMUM_VERSION_REQUIRED`; runtime checks use `IddCxGetVersion`, `IDD_IS_FUNCTION_AVAILABLE`, `IDD_IS_FIELD_AVAILABLE` ("Building IddCx 1.4 drivers"). Version values: 1.2 = 0x1200 (Win10 1709), 1.3 = 0x1300/0x1380 (1803/1809), 1.4 = 0x1400 (1903), 1.5 = 0x1500 (2004–22H2), 1.8–1.10 on Windows 11 ("IddCx versions").
+**Fact:** Windows 10 1709 (IddCx 1.2) can load only 1.0 and 1.2 drivers; 1803+ (IddCx 1.3) can load 1.0–1.3 drivers and 1.4+ drivers built with the minimum-version mechanism.
+**Inference:** With a 2018-12-04 build date, `lci_iddcx.dll` most likely targets IddCx 1.3 or earlier. Features from 1.4+ (remote-session flags, `IddCxAdapterSetRenderAdapter`, system-memory swapchains, HDR) are then absent, which is consistent with the console-IDD inference in §3.
+**Status:** confirm in the binary (Week 4 checklist in the study plan).
 
 ---
 

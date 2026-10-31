@@ -57,21 +57,14 @@ Three components work together:
 
 "Building" here means compiling Microsoft's sample exactly as intended — not writing new code, the same way building the Linux kernel from source doesn't mean writing it.
 
-## Why Debug, not Release
+## Debug and Release — build both (corrected 2026-10-14)
 
-Release binaries strip names down to raw addresses and generated labels:
+Earlier text here said only Debug builds keep names. That was wrong. Names live in the **PDB**, which Visual Studio driver projects emit for Release builds too. The configuration controls optimization, not symbols.
 
-```
-FUN_18003f210
-```
+- **Release + PDB** is the primary baseline: its code shape (inlining, register allocation, RSP-relative frames) matches what a vendor ships, so it diffs and reads like `lci_iddcx.dll` will.
+- **Debug + PDB** is the reading copy: one C++ statement maps to a few instructions, which is easier while learning.
 
-Debug binaries retain real names:
-
-```
-EvtIddCxMonitorAssignSwapChain
-```
-
-This distinction is the entire point of building a labeled reference — a Release build would defeat the purpose.
+Without a PDB either build shows only generated labels such as `FUN_18003f210`.
 
 ## What a PDB is
 
@@ -103,11 +96,13 @@ This is the textbook-before-implementation approach — understand Microsoft's i
 
 Install only — do not build yet. Verify the environment before moving to the sample project.
 
-- [ ] Visual Studio 2022 Community
-- [ ] Windows SDK (version matched to the IddCx target — see version note below)
-- [ ] Windows Driver Kit (WDK), version compatible with IddCx 1.2
+- [ ] Visual Studio 2022 Community **or** Visual Studio 2026 Community (the WDK officially supports both as of 2026; Microsoft's download page lagged and still named VS 2022 when checked on 2026-10-14)
+- [ ] Current Windows SDK
+- [ ] Current Windows Driver Kit (WDK), installed after the SDK, same build number
 
-**Version note:** `lci_iddcx.inf`'s `UmdfExtensions = IddCx0102` (per the original reversing devlog) pins the real Splashtop driver to IddCx 1.2 — an older, narrower feature set than current IddCx versions. Cross-reference Microsoft's IddCx version table to identify which WDK/SDK release shipped IddCx 1.2, and prefer that version for the sample build so the comparison baseline matches Splashtop's actual target rather than a newer framework surface Splashtop's driver can't use.
+Install inside the existing GNOME Boxes `win11` VM on the Fedora host (image last modified 2026-09-02). Give it at least 60 GB of disk if it does not already have it; VS + SDK + WDK is large.
+
+**Version note (corrected 2026-10-14):** `UmdfExtensions = IddCx0102` is the UMDF class-extension binding and is still what Microsoft's Windows 11 sample declares. It does not pin IddCx 1.2. The IddCx API level is chosen at build time (`IDDCX_MINIMUM_VERSION_REQUIRED` plus the WDK headers). Given the 2018-12 build date, the vendor driver most likely targets IddCx 1.3 or earlier (inference). Do not hunt for an old WDK; build the current sample with the current WDK. The sample's `Driver.cpp` uses no version-gated features, so its shape is the same at any IddCx level.
 
 ## Next Steps (once installed)
 
@@ -118,5 +113,6 @@ Install only — do not build yet. Verify the environment before moving to the s
    ```
 3. Locate the sample at `video/IndirectDisplay/`.
 4. Inspect the project structure before compiling — understand what's in it before building it.
-5. Build in **Debug** configuration with `/DEBUG` enabled, producing both `sample.dll` and its matching `.pdb`.
+5. Build **Release** (x64) and **Debug** (x64). Both produce `IddSampleDriver.dll` plus `IddSampleDriver.pdb` in their output folders. Keep each pair together.
+6. Note that the public sample was first published 2020-02-19, after the vendor driver's 2018-12 build; it is a textbook for the framework shape, not the vendor's starting point.
 6. Proceed to the binary-diffing workflow (Ghidra Version Tracking, then BinDiff/BinExport) described in `reverse-engineering-methodology.md`, using this build as the labeled baseline against `lci_iddcx.dll`.
