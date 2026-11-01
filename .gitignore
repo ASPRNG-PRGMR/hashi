@@ -1,1 +1,4 @@
 study/**/build/
+
+# Transferred private Windows evidence; never stage its contents.
+/hashi-stuff/

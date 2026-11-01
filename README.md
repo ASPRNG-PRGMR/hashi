@@ -23,6 +23,10 @@ The goal is not to clone Splashtop's software — it's to speak its wire protoco
 
 ## Current Status — Read This First When Resuming
 
+**Returning to Windows with the private transfer ZIP:** Start with [RETURN-TO-WINDOWS.md](RETURN-TO-WINDOWS.md). Include the ignored `hashi-stuff/` folder in that private transfer; it contains the Windows artifacts and new Fedora evidence bundle.
+
+**2026-11-01 update:** Start with [Fedora next-session handoff](docs/fedora-next-steps.md) and [Fedora investigation](docs/fedora-investigation.md). **Fact:** HASHI still has no Linux host implementation or validated application protocol. The Windows handoff corrections and newer Windows/Fedora observations supersede the historical roadmap below; Windows runtime behavior has not been reproduced on Fedora.
+
 **Phase 0 (Windows host architecture discovery) is mostly complete.** As of 2026-10-14 the active work is a **prerequisite-skills phase** (x64 assembly and Windows reversing) before any disassembly of `lci_iddcx.dll`. The ordered study plan and exercises are in [`docs/study-plan-x64-windows-reversing.md`](docs/study-plan-x64-windows-reversing.md) and [`study/`](study/). Week 1 is defined; Weeks 2–4 are outlines.
 
 **Corrections made on resumption (2026-10-14, details in the devlog):** `IddCx0102` in the INF does not pin IddCx 1.2 (the current Windows 11 sample uses the same value); BinExport's Ghidra extension is stale for Ghidra 12 so diffing starts with Ghidra's built-in Version Tracking; `AppleSSD.sys` is a Boot Camp storage driver unrelated to the iPad link; and the wire protocol HASHI must reproduce lives in the Splashtop host agent and the USB traffic, not in the IddCx driver, so Phase 1 capture outranks Phase 0.75 diffing.
