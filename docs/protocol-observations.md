@@ -1,5 +1,9 @@
 # XDisplay protocol observations
 
+## FED-OBS-008 — offline validation and startup fields, 2026-11-05
+
+See [Fedora startup validation](fedora-startup-validation.md), FED-START-E001–E003. **Fact:** Independent stream parsing, all 1,903 JPEG headers and twelve full decoded pattern checks reproduce the Windows result. The routine conditionally converts startup fields, stores the two client values after four-pixel alignment, and writes the later field 5 directly little-endian. Its success flag is set before the later exchange; the captured zero-prefixed body takes an empty-string path in the inspected instructions. **Inference:** This later reply does not establish successful capability parsing, mandatory acknowledgement or a negotiated codec. Next: follow stored dimension/representation/capability fields into the image pipeline. No guessed protocol was implemented.
+
 ## WIN-OBS-007 — startup/framing, 2026-11-05
 
 See [Windows startup/framing](windows-startup-framing.md), WIN-START-E001–E005. **Fact:** usbmuxd_connect returned socket 1216, generation 3, endpoint 127.0.0.1:55873 → :27015 with port argument 6789. That same connection carried the complete captured startup and 1,903 JPEG records. The observed application streams parse with a tag byte and BE24 payload length; tags 4/5/6 had lengths 0/12/variable in this session. Twelve decoded images matched the controlled pattern. One tag-5 response was split across recv calls (4+12 bytes).

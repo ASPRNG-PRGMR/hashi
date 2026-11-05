@@ -1,5 +1,15 @@
 # HASHI: resume on Windows after the Fedora investigation
 
+## Active Fedora continuation — 2026-11-05
+
+**Fact:** The verified Windows investigation import is committed as `c63c354`. Read [Fedora startup validation](docs/fedora-startup-validation.md) for the current result, durable mapping, hashes and focused startup analysis. The complete original bundle and all four Windows runs are preserved at `/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z/bundle`; receipts and new analysis are in its parent directory. All 1,993 files and 191 indexed evidence records verified. Historical paths below remain provenance.
+
+**Fact:** Fedora independently reproduced exact stream parsing of 1,903 JPEG records and twelve full image/pixel checks. Startup fields use mixed representations; client dimensions are stored after four-pixel alignment, while the later field containing 5 is written directly little-endian. Its meaning and the downstream size/codec selection remain open. No guessed messages were implemented.
+
+**Fact:** Linux Node 24.22.1, Ghidra 12.1.4 and REA 6.8.0 are installed privately, reusing full JDK 21.0.10. Scoped provider and Codex registration checks pass. Actual REA tools remain absent in this session: reconnect Codex on Fedora and perform the small study call using the unchanged DLL. Then trace the connection object's dimension/representation/capability fields into capture, resize and encoder selection. No Windows cable action is needed now. The durable `completion-receipt.json` records final commits and conditional cleanup status.
+
+This update governs the historical Windows execution instructions below.
+
 ## Active continuation update — 2026-11-05: ready for Fedora analysis
 
 Read [Windows startup/framing](docs/windows-startup-framing.md) completely. **Fact:** WIN-NEXT-02 captured the complete observed startup exchange and 1,903 JPEG records on the same socket returned by usbmuxd_connect. Both application streams parse exactly as tag byte + BE24 payload length + payload. Twelve decoded records match independent white/black/white screen checks. Cleanup passed and the user confirmed the display works.

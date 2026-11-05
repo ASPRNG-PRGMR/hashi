@@ -1,5 +1,13 @@
 # HASHI: next session after Fedora static inspection
 
+## Current continuation — 2026-11-05
+
+Start with [Fedora startup validation](fedora-startup-validation.md). **Fact:** Windows WIN-NEXT-01/02 are complete for the recorded configuration; Fedora reproduced the exact tag/BE24 parsing, 1,903 JPEG headers and twelve decoded pattern checks. The complete verified private bundle is under `/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z/bundle`, with fresh evidence and receipts in its parent. The older volatile paths and setup blockers below are historical.
+
+**Fact:** Installed Linux Node 24.22.1 / Ghidra 12.1.4 / REA 6.8.0 under `~/HASHI-private/tools/fedora-20261105`, reusing `/opt/st/STM32CubeMX/jre` (full JDK 21.0.10). Scoped doctor and Codex registration checks pass; actual REA tools are still absent in this running agent. Reconnect the Fedora Codex client and execute the unchanged-study check below using the durable DLL path. Do not rebuild the study or repeat prerequisite installation.
+
+**Next investigation:** Follow connection-object fields `+0x14`, `+0x18`, `+0x40`, `+0x68` from startup into capture/resize/encoder selection. Explain the 2048×1536 client values versus 1280×960 JPEG content. The later startup field 5 is written little-endian; its semantic meaning remains unproved. The captured zero-prefixed later response does not establish successful `diff_jpeg` capability parsing. Keep alternate modes unobserved and do not implement guessed messages. No Windows reconnect experiment is needed merely to finish the transfer.
+
 Updated 2026-11-01. **Objective:** implement a Linux USB host compatible with the **unmodified Splashtop Wired XDisplay iPad app**. **Fact:** No Linux host exists here yet; the application protocol is not established. Do not implement a guessed protocol from strings, four-byte sends, or codec-library filenames.
 
 **Return-transfer update:** For the next session on Windows, start with [RETURN-TO-WINDOWS.md](../RETURN-TO-WINDOWS.md). The new private Fedora outputs have also been preserved in the Git-ignored `hashi-stuff/FEDORA-private-20261101.zip`, verified against their originals. Include the ignored transfer folder when making the private ZIP; `git archive` omits it. The Windows return handoff records the bundle hash and extraction/path mapping. The `/tmp` limitation below describes the original analysis location, which is no longer the only copy of the bundled outputs.
