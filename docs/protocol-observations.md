@@ -1,5 +1,23 @@
 # XDisplay protocol observations
 
+## WIN-OBS-007 — startup/framing, 2026-11-05
+
+See [Windows startup/framing](windows-startup-framing.md), WIN-START-E001–E005. **Fact:** usbmuxd_connect returned socket 1216, generation 3, endpoint 127.0.0.1:55873 → :27015 with port argument 6789. That same connection carried the complete captured startup and 1,903 JPEG records. The observed application streams parse with a tag byte and BE24 payload length; tags 4/5/6 had lengths 0/12/variable in this session. Twelve decoded images matched the controlled pattern. One tag-5 response was split across recv calls (4+12 bytes).
+
+**Inference:** This validates the recorded framing rule, not all command meanings or operating modes. Raw startup bytes, stream offsets, hashes and limitations are in the linked report. No speculative protocol was implemented. Windows capture work for the Fedora transfer is complete.
+
+## WIN-OBS-006 — controlled content, 2026-11-04
+
+See [Windows source correlation](windows-source-correlation.md), Evidence WIN-SOURCE-E001–E004. **Fact:** Socket 1380 in agent PID 26200 mapped to 127.0.0.1:52578 → :27015. Twelve selected successful sends at agent call RVA 0x2f718 decoded as 1280×960 JPEGs and matched independently measured white/black/white square pixels, including early/late samples. The same-build usbmux return identity was observed separately on November 3.
+
+**Inference:** The proven direct Winsock/Apple-loopback boundary carries image-dependent session content. A complete handshake/framing specification and general codec/mode behavior remain unknown. Preserve both the successful run and earlier failed controls. Next: WIN-NEXT-02 startup/stream validation, not speculative protocol implementation.
+
+## WIN-OBS-005 — Windows return, 2026-11-03
+
+Read [Windows return investigation](windows-return-investigation.md) for Evidence IDs WIN-RETURN-E001–E009, hashes, exact addresses and limitations. **Fact:** usbmuxd_connect returned socket 1352 to agent RVA 0x30ca1, associated with 127.0.0.1:62541 → 127.0.0.1:27015; the observed port argument was 6789. The agent used the same generation of socket for direct Winsock sends at RVAs 0x2f702/0x2f718. Later selected successful payload buffers decoded as 1280×960 JPEGs.
+
+**Inference:** This boundary transports display-session image content. **Unresolved:** The final corrected test's six buffers were identical despite helper-logged square changes; actual controlled image dependence is not established. Earlier helpers had a DPI-placement error. Preserve that negative result and independently verify the image source before another content-correlation trial. JPEG in selected buffers does not establish the whole protocol, frame boundaries, all codecs, or a general encryption claim. Older statements that no image content or numeric port argument has been observed are historical.
+
 Notes updated 2026-11-01 for the 2026-10-31 Windows experiment: process/device/endpoint evidence includes one cable disconnect/reconnect cycle. No USB or application payload capture, message framing, codec, encryption, or iPad application endpoint has been established. Follow `WINDOWS-CODEX-HANDOFF.md` when older project notes conflict.
 
 Private run: `C:\Users\noobieGG\HASHI-private\runs\20261031-184820`. Binary identities and component roles are recorded in `docs/windows-components.md`. All times below are Asia/Calcutta, UTC+05:30. These findings use PowerShell 7.6.5 and Windows CIM/network queries, not REA decompilation.

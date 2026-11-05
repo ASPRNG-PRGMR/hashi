@@ -1,5 +1,25 @@
 # Windows next-session handoff
 
+## Current continuation — 2026-11-05: Windows capture complete
+
+[Windows startup/framing](windows-startup-framing.md) records the complete bounded WIN-NEXT-02 result: same-connection socket-return proof, bidirectional startup, 1,903 image records, validated observed tag/BE24 envelope and twelve matching decoded test images. All hooks detached and the user confirmed display operation.
+
+Proceed to Fedora using the prepared import prompt/bundle. Next work is offline validation and targeted startup-field semantics, not another Windows setup/cable cycle. Complete any live REA/Ghidra study check on the chosen analysis host. Additional Windows captures should answer a specific later gap (other modes, errors or input), not repeat the successful baseline. Preserve all earlier failed and successful runs.
+
+## Current continuation — 2026-11-04
+
+Read [Windows source correlation](windows-source-correlation.md). **Fact:** Six local screen checks and twelve decoded send buffers now match the white/black/white test; WIN-NEXT-01's image-content question is answered for the tested configuration, with the earlier socket-return proof retained separately. No complete protocol is claimed. Earlier negative controls remain evidence.
+
+Next: WIN-NEXT-02, a narrow startup-exchange/framing investigation using existing evidence first, then a bounded complete stream recording if required. Preserve connection generations and successful byte counts; do not assume four-byte sends are validated headers. Reuse the new private source-check-20261104-142811 run and corrected helper with local pixel checks. Separately reconnect Codex for the outstanding actual REA/Ghidra study call. No installation rebuild is needed.
+
+## Current continuation — 2026-11-03
+
+This update supersedes conflicting historical statements below. Start with [RETURN-TO-WINDOWS.md](../RETURN-TO-WINDOWS.md) and read [Windows return investigation](windows-return-investigation.md) completely. **Fact:** Active workspace is the Git checkout C:\Users\noobieGG\Downloads\hashi. Preserve its older nested transfer.
+
+**Fact:** The socket-identity and direct Winsock parts of WIN-NEXT-01 are established; sampled successful sends decode as 1280×960 JPEG images. **Unresolved:** Six buffers in the DPI-corrected white/black/white trial were identical and did not match the square. The next experiment must first verify actual test-window visibility, session/desktop, physical monitor bounds and captured image source. Do not infer image dependence from the earlier confounded size statistics or implement a guessed protocol.
+
+Reuse private run C:\Users\noobieGG\HASHI-private\runs\return-20261103-232442 and its hashed evidence index. All hooks detached. REA doctor and registration pass, but actual tools were absent from this chat: reconnect Codex, inspect live tools, and use the hash-verified transferred study DLL without rebuilding. The previous statement that no reconnect blocker remains is historical, not current.
+
 Updated 2026-11-01. Continue in `C:\Users\noobieGG\Downloads\hashi-main`; read `WINDOWS-CODEX-HANDOFF.md` as the governing plan. This directory is an extracted workspace, not a Git checkout. Preserve existing work; no remote is known.
 
 ## Established state

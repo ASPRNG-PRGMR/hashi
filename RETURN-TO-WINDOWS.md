@@ -1,5 +1,29 @@
 # HASHI: resume on Windows after the Fedora investigation
 
+## Active continuation update — 2026-11-05: ready for Fedora analysis
+
+Read [Windows startup/framing](docs/windows-startup-framing.md) completely. **Fact:** WIN-NEXT-02 captured the complete observed startup exchange and 1,903 JPEG records on the same socket returned by usbmuxd_connect. Both application streams parse exactly as tag byte + BE24 payload length + payload. Twelve decoded records match independent white/black/white screen checks. Cleanup passed and the user confirmed the display works.
+
+The planned Windows capture is complete. The next stage is Fedora import, offline validation and narrow startup-field analysis. Raw evidence remains private at C:\Users\noobieGG\HASHI-private\runs\startup-20261105-103819, alongside earlier runs. Use FEDORA-IMPORT-PROMPT.md and the prepared hashi-stuff bundle to reconcile changes into the existing Fedora repository, verify durable evidence copies, make scoped commits, and only then remove the temporary import directory. Startup field semantics, alternate modes and a complete interoperable protocol remain unvalidated; no speculative implementation was added. The actual REA MCP check remains separate and can be completed on Fedora.
+
+## Active continuation update — 2026-11-04
+
+Read [Windows source correlation](docs/windows-source-correlation.md) and [Windows return investigation](docs/windows-return-investigation.md) completely. **Fact:** The November 4 test independently checked visible screen pixels and matched twelve decoded 1280×960 JPEG send buffers to white → black → white square changes. **Inference:** Together with November 3's usbmuxd_connect socket-return proof at the matching-build direct Winsock boundary, this answers WIN-NEXT-01's focused transport/image question across two sessions. The earlier unsuccessful controls remain preserved and unexplained.
+
+New private run: C:\Users\noobieGG\HASHI-private\runs\source-check-20261104-142811 (40 indexed records verified). All hooks detached. The next protocol investigation is WIN-NEXT-02: validate the startup exchange and stream framing; do not implement a guessed protocol. Actual REA tools are still absent from this chat despite aligned registration; a current live Ghidra study check requires Codex reconnection, not a rebuild or Fedora setup. The active workspace remains C:\Users\noobieGG\Downloads\hashi.
+
+This update governs the older unresolved-image statements below. The new report distinguishes the earlier observed return socket from today's already-connected socket and retains that session boundary.
+
+## Active continuation update — 2026-11-03
+
+Read [the Windows return investigation](docs/windows-return-investigation.md) completely before executing the historical plan below. **Fact:** Active checkout is C:\Users\noobieGG\Downloads\hashi; the nested hashi-stuff\hashi-main remains historical. All 32,279 original manifest files and 30 indexed Fedora records verified. Private current run: C:\Users\noobieGG\HASHI-private\runs\return-20261103-232442.
+
+**Fact:** WIN-NEXT-01 established that usbmuxd_connect returned the Apple-loopback socket (handle 1352, 127.0.0.1:62541 → :27015), with port argument 6789, and direct agent Winsock sends carried decodable 1280×960 JPEG buffers. **Unresolved:** The corrected controlled-square run returned six identical images, so causal image dependence is not verified. Read the DPI-placement correction and negative result; do not repeat the original test helper unchanged or claim a complete protocol.
+
+**Fact:** All four bounded traces detached cleanly. REA/Ghidra/JDK doctor passes and registration is aligned, but no REA tools were exposed in this chat. A fresh actual Codex study check still requires reconnection. No study rebuild, Fedora setup, driver change or protocol implementation was performed. The next step is to verify the controlled test window's actual visibility/image source, then correlate decoded content; see the new report's final section.
+
+The remainder is the preserved November 1 handoff and background; this update governs conflicting path, tool-connection and transport-unknown statements.
+
 Prepared 2026-11-01. This file and the accompanying directory are the complete context for the next Windows Codex session. Proceed with the work, not just a plan.
 
 ## Objective and current priority

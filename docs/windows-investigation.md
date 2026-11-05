@@ -1,5 +1,17 @@
 # Windows investigation log
 
+## Startup-capture update — 2026-11-05
+
+Read [Windows startup/framing](windows-startup-framing.md). The planned WIN-NEXT-02 capture is complete, including same-connection startup/image proof, full successful byte streams, observed framing validation and clean detach. Fedora can now continue offline. Preserve the transferred study DLL and all historical evidence; the absent live REA MCP connection remains a separate setup check, not a reason to repeat Windows capture.
+
+## Source-correlation update — 2026-11-04
+
+[Windows source correlation](windows-source-correlation.md) establishes the missing controlled-content result with independently checked screen pixels and twelve decoded JPEG send buffers. The transport conclusion combines today's fresh-process content evidence with the prior matching-build usbmux return trace; no same-connection continuity across sessions is implied. All hooks detached and 40 new evidence records verified. Actual REA tools remain absent from this chat, so a fresh live MCP study check is still outstanding.
+
+## Return update — 2026-11-03
+
+See [Windows return investigation](windows-return-investigation.md) for the current path mapping, complete integrity verification, actual tool availability, runtime socket proof, JPEG sample checks, DPI-control failure and next discriminating observation. **Fact:** usbmuxd_connect returned the observed Apple socket and direct Winsock sends carried valid JPEG image buffers. **Unresolved:** Controlled square-to-payload correspondence and this chat's live REA check. Historical completion statements below apply to the earlier setup task only.
+
 The complete `WINDOWS-CODEX-HANDOFF.md` was read and adopted as the investigation plan. Its SHA-256 at intake was `8EE60814530901F724B2B848F3804FB2692D7B04D9240B99C40762922BDBE434`. Its corrections supersede older project notes. Existing workspace: `C:\Users\noobieGG\Downloads\hashi-main`. This extracted directory had no `.git` repository; no remote was created or assumed.
 
 ## Environment and evidence locations

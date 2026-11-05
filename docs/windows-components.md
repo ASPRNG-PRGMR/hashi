@@ -1,5 +1,9 @@
 # Windows XDisplay component inventory
 
+## Return verification — 2026-11-03
+
+[Windows return investigation](windows-return-investigation.md) records current installed/restored binary hashes, agent PID 26580, Apple-service PID 9976, actual module bases and loaded Winsock IAT resolution. **Fact:** These vendor hashes match the earlier x86 artifacts. Agent base 0x00cc0000 and libusbmuxd base 0x73c90000 are observed for this process instance only; rederive live addresses next time. The display installation was preserved.
+
 Experiment recorded 2026-10-31, Asia/Calcutta (UTC+05:30); notes updated 2026-11-01. The corrections and priorities in `WINDOWS-CODEX-HANDOFF.md` govern this inventory. This document summarizes local observations; it contains no vendor code or device identifiers.
 
 Private evidence root for this run: `C:\Users\noobieGG\HASHI-private\runs\20261031-184820`. Paths below that root are evidence references, not files to add to the source workspace. Binary identities were measured at approximately 18:51:05 using `scripts/Get-BinaryIdentity.ps1`; its PE-header checks determine architecture and preferred image base, and `Get-FileHash -Algorithm SHA256` determines identity. File versions are embedded metadata, not independently verified release history.
