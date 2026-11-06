@@ -1,5 +1,13 @@
 # HASHI: next session after Fedora static inspection
 
+## Current continuation — 2026-11-06
+
+**Fact:** See FED-BACKEND-E001 and FED-FRAME-E001 in [Fedora startup validation](fedora-startup-validation.md). The five-rung `InitCaptor` ladder and seven capture/thread vtables were independently mapped from the unchanged agent. The small integers in the ladder are exception cleanup states, not captor IDs. The config source and full availability semantics remain open. The existing Windows module snapshots filter system paths and cannot identify the capture backend.
+
+**Fact:** The repository now contains only the validated record boundary and JPEG SOI/EOI/SOF0 inspection with synthetic tests. The 1,903 observed frames have one DQT/DHT table variant and 4:2:0 sampling. These facts do not settle which JPEG encoder class ran. The user declined active Fedora replay to the iPad; keep the Windows plan passive.
+
+**Next:** Trace the config fields back to their exact source and finish the availability helpers. Decode the listed hook conventions and produce a reviewed probe specification before probe code. Inspect the existing Windows runner and agent before extending them. Complete phase-separated frame analysis and verify a full module inventory requirement. Only then request the narrow Windows session for runtime values, modes, monitor and DPI context. Do not repeat framing or REA study checks.
+
 ## Current continuation — 2026-11-05
 
 Start with [Fedora startup validation](fedora-startup-validation.md). **Fact:** Windows WIN-NEXT-01/02 are complete for the recorded configuration; Fedora reproduced the exact tag/BE24 parsing, 1,903 JPEG headers and twelve decoded pattern checks. The complete verified private bundle is under `/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z/bundle`, with fresh evidence and receipts in its parent. The older volatile paths and setup blockers below are historical.

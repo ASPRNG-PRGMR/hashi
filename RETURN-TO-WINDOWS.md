@@ -1,5 +1,11 @@
 # HASHI: resume on Windows after the Fedora investigation
 
+## Active Fedora continuation — 2026-11-06
+
+**Fact:** The Fedora checkout was clean on `main` at `12d6499` when this continuation began. FED-BACKEND-E001 in [Fedora startup validation](docs/fedora-startup-validation.md) maps the complete five-rung `InitCaptor` priority ladder and seven capture/thread class vtables for the unchanged agent SHA-256 `cb9ab63be48947344e6d0e5e718e5522e707c64473dac6cc026149424964e52c`. The ladder's small integers are exception cleanup states, not persistent backend IDs. Its config source and precise availability tests are still under investigation.
+
+**Fact:** FED-FRAME-E001 measures the 1,903 retained frames and adds a tested narrow framing parser. The user declined active Fedora replay to the iPad. No new Windows run, protocol traffic, driver changes or vendor execution occurred. Keep the next Windows observation passive. Its required full module list must include system DLLs; historical filtered `modules.json` snapshots cannot identify the capture backend. Do not run the older broad cable or REA-study plans below.
+
 ## Active Fedora continuation — 2026-11-05
 
 **Fact:** The verified Windows investigation import is committed as `c63c354`. Read [Fedora startup validation](docs/fedora-startup-validation.md) for the current result, durable mapping, hashes and focused startup analysis. The complete original bundle and all four Windows runs are preserved at `/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z/bundle`; receipts and new analysis are in its parent directory. All 1,993 files and 191 indexed evidence records verified. Historical paths below remain provenance.
