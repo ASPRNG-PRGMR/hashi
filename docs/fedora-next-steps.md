@@ -1,5 +1,15 @@
 # HASHI: next session after Fedora static inspection
 
+## Linux host: architecture settled and transport built — 2026-11-08
+
+**Fact (FED-ARCH-E001):** the environment was measured, not assumed — GNOME Shell 51.1 on Wayland, mutter 51.1, PipeWire 1.6.11, usbmuxd active, iPad enumerated as `05ac:12ab`. Mutter exposes `ScreenCast.Session.RecordVirtual` (a userspace virtual monitor streamed over PipeWire) and `RemoteDesktop` input injection with `SupportedDeviceTypes = 7`. The display question is answered with no kernel module, no root and no `evdi`; `Xvfb`, VKMS and wlroots headless outputs are ruled out with reasons. One real simplification falls out: `NotifyPointerMotionAbsolute` takes stream-relative coordinates and the decoded inbound coordinates are monitor-relative pixels, so the Windows agent's virtual-desktop normalisation has no Linux equivalent to reproduce. See [Linux host architecture](linux-host-architecture.md).
+
+**Fact (FED-JPEG-E001):** all 1,903 records share a 623-byte prelude derived entirely from published Annex K tables at quality 80, 1280×960, 4:2:0; `hashi_jpeg.build_prelude()` reproduces it byte-for-byte, verified 1903/1903 and 12/12. No vendor table data is transcribed — the clean-room question was checked first and came back clean.
+
+**Fact (FED-USBMUX-E001):** the usbmux layer is implemented and validated against the captured control exchange, including the byte-swapped `PortNumber` (6789 → 34074 via `htons`). It performs no I/O. Also corrected: the usbmuxd daemon runs but the libimobiledevice CLI tools are absent.
+
+**Next:** the JPEG entropy coder (DCT, quantize, Huffman in 4:2:0 — no protocol unknowns remain in it); then the Mutter virtual-monitor and PipeWire capture plumbing, and input injection through `RemoteDesktop`. Verify the `RecordVirtual` and `Notify*` parameter contracts against Mutter 51 before depending on them, since only the method names were confirmed. **Nothing has been transmitted to the iPad.**
+
 ## Steady state decoded — FED-STREAM-E001, 2026-11-08
 
 **Fact:** `CConnectBase::Run` (RVA `0x2f580`) and `CConnectBase::ReceiveThread` (RVA ~`0x2f8c0`) are decoded and implemented in `hashi_stream.py`. **The whole host→device direction is now reproducible offline byte-for-byte:** re-encoding all 1,903 captured image records and prepending the rebuilt handshake yields the entire 130,375,177-byte outgoing application stream, rebuilt and captured SHA-256 both `85b81dd7e307b371e45be5dda6eb26bfc35c3fe789af1c32ec2a70413a2cb123`. The same header codec appears in three independent places now, so it is *the* framing rule. Pacing is `1000 / fps` measured from `GetSystemTime`'s `wMilliseconds` alone, so the agent's own elapsed calculation wraps every second.
