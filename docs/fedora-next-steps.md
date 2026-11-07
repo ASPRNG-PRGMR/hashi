@@ -1,5 +1,15 @@
 # HASHI: next session after Fedora static inspection
 
+## Steady state decoded — FED-STREAM-E001, 2026-11-08
+
+**Fact:** `CConnectBase::Run` (RVA `0x2f580`) and `CConnectBase::ReceiveThread` (RVA ~`0x2f8c0`) are decoded and implemented in `hashi_stream.py`. **The whole host→device direction is now reproducible offline byte-for-byte:** re-encoding all 1,903 captured image records and prepending the rebuilt handshake yields the entire 130,375,177-byte outgoing application stream, rebuilt and captured SHA-256 both `85b81dd7e307b371e45be5dda6eb26bfc35c3fe789af1c32ec2a70413a2cb123`. The same header codec appears in three independent places now, so it is *the* framing rule. Pacing is `1000 / fps` measured from `GetSystemTime`'s `wMilliseconds` alone, so the agent's own elapsed calculation wraps every second.
+
+**Fact:** The inbound TLV channel is the **input** channel — handler `0x440110` builds a 28-byte Win32 `INPUT` and calls `SendInput`. Its 17-entry dispatch table is mapped. `CConnectBase::SendReconfigVideo` is decoded: field 0 = 1 carrying the output dimensions from shared `+0x1c`/`+0x20`, swapped when `+0x24` is set — the same field 0 the startup HELLO uses, so resize is decoded rather than guessed.
+
+**Limitation that governs the next step:** the captured incoming stream is 346 bytes — 294 usbmux, 52 startup, **zero** steady state. No inbound record and no reconfiguration was ever observed. The input dispatch and the reconfig encoder therefore have no byte-exact validation.
+
+**Next, offline:** the individual input paths behind the 17-entry table (to map `field0` to event kinds and settle absolute vs normalised coordinates), the `0x70` subtype branch, `CConnectBase::HandleEvent`, the trailing "extra data" block and the capability/`diff_jpeg` parser. **Next, needing the iPad connected:** observing actual inbound records, which requires someone touching the iPad screen while a capture runs. See [steady state](fedora-steady-state.md).
+
 ## Startup handshake decoded — FED-START-E001, 2026-11-07
 
 **Fact:** The whole observed startup exchange is one 0x792-byte function at RVA `0x303f0`, named `CProbeUsbmuxd::DoHandshake` by the agent's own strings. It is now decoded and implemented in `hashi_startup.py`, validated offline with no device and no Windows: the rebuilt host sequence reproduces the captured outgoing startup bytes **byte-for-byte**, the captured incoming stream parses with zero remainder, all 1,903 image headers re-encode exactly, and the full 130,375,177-byte application stream is accounted for. Three previously open items are closed: the 2048×1536 fields are the client dimensions (aligned `((v-1) & ~3) + 4`), the little-endian `05 00 00 00` is field 1 of the `0xfc` record written with no `htonl`, and the 4-plus-12 receive split is by design. Shared `+0x40` is identified as the byte-order-mode flag. See [startup handshake](fedora-startup-handshake.md).

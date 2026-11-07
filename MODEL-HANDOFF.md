@@ -126,16 +126,35 @@ the whole 130,375,177-byte application stream accounted for.
 wants an `RtlGetVersion`-derived value `>= 5`, which is suggestive, not proof),
 and the legacy native-order fallback (type 1) is decoded but **never observed**.
 
+## What FED-STREAM-E001 settled
+
+**Fact:** `CConnectBase::Run` (RVA `0x2f580`) and `CConnectBase::ReceiveThread`
+(RVA ~`0x2f8c0`) are decoded, in `hashi_stream.py`. The **whole outgoing
+application stream reproduces byte-for-byte** (130,375,177 bytes, SHA-256
+`85b81dd7e307b371e45be5dda6eb26bfc35c3fe789af1c32ec2a70413a2cb123`). Same header
+codec as startup, third independent confirmation. Pacing `1000 / fps` off
+`GetSystemTime`'s `wMilliseconds` only, so it wraps every second. Outbound sends
+are checked only against `SOCKET_ERROR`, not length — a host should check properly.
+
+**Fact:** inbound TLV is the **input** channel: handler `0x440110` builds a
+28-byte Win32 `INPUT` and calls `SendInput`; its 17-entry table at VA `0x4404f8`
+is mapped. `SendReconfigVideo` sends field 0 = 1 with the output dimensions from
+shared `+0x1c`/`+0x20`, swapped when `+0x24` is set; field 0 = 1 is the same
+value the startup HELLO uses, so resize is decoded, not guessed.
+
+**The governing limitation:** the captured incoming stream is 346 bytes — 294
+usbmux, 52 startup, **zero** steady state. No inbound record, no reconfiguration.
+The input dispatch and reconfig encoder have **no** byte-exact validation. Do not
+promote them, and do not assign meanings to `field0` values or coordinates.
+
 ## Next task, in order — there is no pending Windows work
 
-1. **The steady-state image loop.** Decode receive helper `0x112e8` and the
-   ongoing send path `0x2f6c5`–`0x2f718` that WIN-START-E005 corroborated, to
-   establish how frames are paced and how incoming traffic is handled after
-   startup. Static only; extend `hashi_startup.py`/`hashi_framing.py`.
+1. **The individual input paths** behind the 17-entry table, to map `field0`
+   values to concrete event kinds and settle whether coordinates are absolute or
+   normalised. Also the `0x70` subtype branch and `CConnectBase::HandleEvent`.
 2. **The trailing "extra data" block and the capability/`diff_jpeg` parser.** The
    captured capability body begins with NUL and bypasses the inspected
-   `diff_jpeg` key path, so differential JPEG is *not* established. Decode the
-   parser rather than guessing the format.
+   `diff_jpeg` key path, so differential JPEG is *not* established.
 3. **JPEG emission.** All 1,903 frames share one DQT/DHT table set and 4:2:0
    sampling, already established, so a host can emit the same tables without
    guessing. Target size is **1280×960**, the user's stated requirement.
@@ -143,6 +162,10 @@ and the legacy native-order fallback (type 1) is decoded but **never observed**.
    sites, to bound the FED-MODE-E001 claim by evidence.
 5. Reconcile new evidence with explicit Facts, Inferences and unknowns. Keep
    extending the offline byte-exact harness rather than reaching for the device.
+
+**The one thing that needs hardware:** observing inbound input records requires
+the iPad connected *and* someone touching its screen while a capture runs. The
+user has been asked about this; do not assume it has happened.
 
 ## Constraints
 
