@@ -193,3 +193,109 @@ def tlv_ring_slot(sequence: int) -> int:
     if sequence < 0:
         raise StreamError(f"sequence must be non-negative, got {sequence}")
     return sequence % TLV_RING_SLOTS
+
+
+# ---------------------------------------------------------------------------
+# Inbound input dispatch — handler 0x440110  (STATIC ONLY, NEVER OBSERVED)
+# ---------------------------------------------------------------------------
+
+#: Jump-table targets at VA 0x4404f8, read from the image as data (objdump
+#: renders the table as instructions). Index is ``field0 - 1``, valid for
+#: field0 in 1..17; anything above reaches the epilogue directly.
+#: Mapped as {field0: target RVA}.
+INPUT_DISPATCH_TABLE = {
+    1: 0x40132, 2: 0x40132,
+    3: 0x404ED,
+    4: 0x4027C, 7: 0x4027C,
+    5: 0x40254, 6: 0x4025B, 8: 0x40262, 9: 0x40269,
+    10: 0x401C0,
+    11: 0x404ED, 12: 0x404ED, 13: 0x404ED,
+    14: 0x40270, 15: 0x40277,
+    16: 0x40386, 17: 0x40386,
+}
+
+#: RVA of the shared epilogue. A field0 routed here is accepted and discarded.
+INPUT_DISPATCH_EPILOGUE = 0x404ED
+
+#: field0 values the table routes straight to the epilogue, i.e. recognised as
+#: in range but not acted on.
+INPUT_IGNORED = (3, 11, 12, 13)
+
+#: Highest field0 the table covers (``cmp eax,0x10; ja`` at RVA 0x40122).
+INPUT_DISPATCH_MAX = 17
+
+#: Size of the structure the handler builds before calling SendInput
+#: (``push 0x1c`` at RVA 0x40197). Matches Win32 INPUT on x86.
+WIN32_INPUT_SIZE = 28
+
+
+def input_dispatch_target(field0: int) -> int | None:
+    """Jump-table target RVA for a TLV ``field0``, or None if out of range.
+
+    **Fact.** Handler ``0x440110`` computes ``field0 - 1``, rejects anything
+    above 0x10 (RVA 0x40122), and jumps through the table at VA 0x4404f8. It
+    builds a 28-byte structure and calls **``SendInput``** (IAT 0x57b77c) at RVA
+    0x401a8 and 0x40244, so this path injects input into the Windows session.
+
+    **Static only — never observed on the wire.** No inbound record was captured.
+    """
+    if field0 < 1 or field0 > INPUT_DISPATCH_MAX:
+        return None
+    return INPUT_DISPATCH_TABLE[field0]
+
+
+def input_is_acted_on(field0: int) -> bool:
+    """Whether a ``field0`` reaches a real handler rather than the epilogue."""
+    target = input_dispatch_target(field0)
+    return target is not None and target != INPUT_DISPATCH_EPILOGUE
+
+
+# ---------------------------------------------------------------------------
+# Outbound video reconfiguration — CConnectBase::SendReconfigVideo
+# ---------------------------------------------------------------------------
+
+#: Control-record field 0 used to announce host video configuration. The startup
+#: HELLO uses the same value with zero dimensions, and the device answers with
+#: field 0 = 2 carrying its own, so 1 is "host side" and 2 is "client side".
+MSG_VIDEO_CONFIG = 0x01
+
+
+def encode_reconfig_video(
+    output_width: int,
+    output_height: int,
+    *,
+    transposed: bool = False,
+    network_order: bool = True,
+) -> bytes:
+    """Build the record ``CConnectBase::SendReconfigVideo`` sends.
+
+    **Fact, decoded from instructions at RVA 0x2f243-0x2f29a.** It is a 16-byte
+    control record: the usual type-byte + BE24-length header, field 0 = 1, and
+    fields 1 and 2 taken from shared state ``+0x1c``/``+0x20`` — the *output*
+    dimensions established by FED-MODE-E001 as the selected monitor's
+    ``rcMonitor`` extent. Each is passed through ``htonl``. Failure logs
+    ``send video config failed: %d``.
+
+    **Fact:** the order of the two dimensions is swapped when shared ``+0x24``
+    is nonzero (RVA 0x2f257-0x2f286), which ``transposed`` models.
+
+    **Inference:** ``+0x24`` being a transpose flag is consistent with a
+    rotation or orientation state, but this slice does not establish what sets
+    it.
+
+    **Never observed on the wire.** No reconfiguration occurred during the
+    captured session, so unlike the startup sequence this encoder has no
+    byte-exact validation. It is decoded, not guessed — but it is also not
+    confirmed. Nothing in this repository transmits it.
+    """
+    from hashi_startup import encode_control  # local import: codec reuse only
+
+    for name, value in (("output_width", output_width), ("output_height", output_height)):
+        if value <= 0:
+            raise StreamError(f"{name} must be positive, got {value}")
+    first, second = (
+        (output_height, output_width) if transposed else (output_width, output_height)
+    )
+    return encode_control(
+        MSG_VIDEO_CONFIG, first, second, network_order=network_order
+    )

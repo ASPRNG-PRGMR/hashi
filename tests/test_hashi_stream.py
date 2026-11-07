@@ -139,3 +139,82 @@ class InboundTlvTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InputDispatchTests(unittest.TestCase):
+    """Statically decoded from the jump table at VA 0x4404f8. Never observed."""
+
+    def test_table_covers_field0_one_through_seventeen(self):
+        from hashi_stream import INPUT_DISPATCH_MAX, input_dispatch_target
+        self.assertEqual(INPUT_DISPATCH_MAX, 17)
+        for f in range(1, 18):
+            self.assertIsNotNone(input_dispatch_target(f))
+        for f in (0, 18, 0x70, 0x71, 255):
+            self.assertIsNone(input_dispatch_target(f))
+
+    def test_keyboard_pair_shares_one_target(self):
+        from hashi_stream import input_dispatch_target
+        self.assertEqual(input_dispatch_target(1), input_dispatch_target(2))
+        self.assertEqual(input_dispatch_target(1), 0x40132)
+
+    def test_in_range_but_ignored_values_reach_the_epilogue(self):
+        from hashi_stream import (
+            INPUT_DISPATCH_EPILOGUE,
+            INPUT_IGNORED,
+            input_dispatch_target,
+            input_is_acted_on,
+        )
+        self.assertEqual(INPUT_IGNORED, (3, 11, 12, 13))
+        for f in INPUT_IGNORED:
+            self.assertEqual(input_dispatch_target(f), INPUT_DISPATCH_EPILOGUE)
+            self.assertFalse(input_is_acted_on(f))
+
+    def test_six_adjacent_stubs_are_seven_bytes_apart(self):
+        # 5, 6, 8, 9, 14, 15 land on consecutive 7-byte stubs that feed a
+        # shared path, consistent with button down/up pairs. Which button is
+        # which is NOT established.
+        from hashi_stream import input_dispatch_target
+        stubs = [input_dispatch_target(f) for f in (5, 6, 8, 9, 14, 15)]
+        self.assertEqual(stubs, sorted(stubs))
+        self.assertEqual({b - a for a, b in zip(stubs, stubs[1:])}, {7})
+
+    def test_pairs_sharing_a_target(self):
+        from hashi_stream import input_dispatch_target
+        self.assertEqual(input_dispatch_target(4), input_dispatch_target(7))
+        self.assertEqual(input_dispatch_target(16), input_dispatch_target(17))
+
+    def test_win32_input_size(self):
+        from hashi_stream import WIN32_INPUT_SIZE
+        self.assertEqual(WIN32_INPUT_SIZE, 28)
+
+
+class ReconfigVideoTests(unittest.TestCase):
+    """Decoded from instructions; never observed on the wire."""
+
+    def test_carries_the_output_dimensions_big_endian(self):
+        from hashi_stream import encode_reconfig_video
+        record = encode_reconfig_video(1280, 960)
+        self.assertEqual(record, bytes.fromhex("0500000c" "00000001" "00000500" "000003c0"))
+
+    def test_transpose_flag_swaps_the_pair(self):
+        from hashi_stream import encode_reconfig_video
+        self.assertEqual(
+            encode_reconfig_video(1280, 960, transposed=True),
+            bytes.fromhex("0500000c" "00000001" "000003c0" "00000500"),
+        )
+
+    def test_shares_field0_with_the_startup_hello(self):
+        # HELLO is the same record shape with zero dimensions, which is why
+        # field0 = 1 reads as "host video config" and 2 as "client".
+        from hashi_startup import MSG_HELLO, encode_control
+        from hashi_stream import MSG_VIDEO_CONFIG, encode_reconfig_video
+        self.assertEqual(MSG_VIDEO_CONFIG, MSG_HELLO)
+        hello = encode_control(MSG_HELLO)
+        reconfig = encode_reconfig_video(1280, 960)
+        self.assertEqual(hello[:8], reconfig[:8])  # header + field0 identical
+
+    def test_rejects_non_positive_dimensions(self):
+        from hashi_stream import encode_reconfig_video
+        for w, h in ((0, 960), (1280, 0), (-1280, 960)):
+            with self.assertRaises(StreamError):
+                encode_reconfig_video(w, h)
