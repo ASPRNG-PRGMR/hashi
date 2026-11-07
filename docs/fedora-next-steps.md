@@ -1,5 +1,11 @@
 # HASHI: next session after Fedora static inspection
 
+## Windows backend observation complete — 2026-11-07
+
+**Fact (WIN-BACKEND-E001–E004):** On the working Windows installation, the loaded LCI captor vtable was RVA `0x1ac4b4`, and the ordinary JPEG encoder vtable was RVA `0x1ac818`. A single normal cable reconnect with the bounded passive observer captured 2048×1536 client values, a 1600×1200 LCI sizing-helper result, then 1280×960 after monitor refresh and at ordinary JPEG initialization. The post-reconnect LuminonCore current mode and rectangle were 1280×960. Read the new top section of [Fedora startup validation](fedora-startup-validation.md) for timestamps, addresses, hashes, registry defaults, probe cleanup and limitations. The user confirmed the display works. A first broader hook failed at RVA `0x31a26`; its raw output is retained, while the successful narrowed run detached cleanly.
+
+**Next:** The active captor and JPEG class are established for this session. The remaining sizing question is why Windows/the LCI driver selected 1280×960 despite the helper's 1600×1200 request; available modes include both. A future experiment should instrument only the specific mode request/return boundary after static caller analysis, retaining current mode and monitor identity. It requires fresh justification, not another transport/framing or study check. Alternate captors, differential JPEG negotiation, the field 5 and a full interoperable host remain open. Do not implement guessed messages or replay Fedora startup to the iPad.
+
 ## Current continuation — 2026-11-06
 
 **Fact:** See FED-BACKEND-E001 and FED-FRAME-E001 in [Fedora startup validation](fedora-startup-validation.md). The five-rung `InitCaptor` ladder and seven capture/thread vtables were independently mapped from the unchanged agent. The small integers in the ladder are exception cleanup states, not captor IDs. The config source and full availability semantics remain open. The existing Windows module snapshots filter system paths and cannot identify the capture backend.
