@@ -449,3 +449,46 @@ def input_kind(field0: int) -> str:
     if 1 <= field0 <= INPUT_DISPATCH_MAX:
         return "other"
     return "out-of-range"
+
+
+# ---------------------------------------------------------------------------
+# Internal event ids — CConnectBase::HandleEvent, RVA 0x2ef90
+# ---------------------------------------------------------------------------
+
+#: Event id the TLV ``0x70`` subtype enqueues (RVA 0x2fc49 stores 0xc9 before a
+#: virtual call on the global object at ``ds:0x5dc104``).
+EVENT_FROM_TLV_SUBTYPE_70 = 0xC9
+
+#: Valid event-id range. RVA 0x2efc0-0x2efc3 computes ``id - 2`` and rejects
+#: anything above 0xc8, so ids 2..202 inclusive reach the dispatcher.
+EVENT_ID_MIN = 2
+EVENT_ID_MAX = 202
+
+#: ``CConnectBase::HandleEvent`` gives distinct handling to exactly five ids;
+#: the other 196 in range fall to the default at RVA 0x2f110. Mapped as
+#: {event id: case-target RVA}. Read from the 201-entry byte index table at VA
+#: 0x42f134 and the 6-entry case table at VA 0x42f11c.
+EVENT_HANDLED = {
+    0x02: 0x2F060,
+    0x04: 0x2F0A2,
+    0x1A: 0x2F0E0,
+    0xC9: 0x2EFDC,
+    0xCA: 0x2F01E,
+}
+
+#: Default case target for every other in-range id.
+EVENT_DEFAULT_TARGET = 0x2F110
+
+
+def event_is_handled(event_id: int) -> bool:
+    """Whether ``HandleEvent`` gives this id its own case.
+
+    **Fact.** Ids outside 2..202 are rejected outright; of those in range only
+    the five in :data:`EVENT_HANDLED` have distinct cases.
+
+    **Static only.** No event was observed; the dispatch beyond each case is an
+    indirect virtual call this slice did not resolve.
+    """
+    if not EVENT_ID_MIN <= event_id <= EVENT_ID_MAX:
+        return False
+    return event_id in EVENT_HANDLED

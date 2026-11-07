@@ -8,7 +8,9 @@
 
 **Limitation that governs the next step:** the captured incoming stream is 346 bytes — 294 usbmux, 52 startup, **zero** steady state. No inbound record and no reconfiguration was ever observed. The input dispatch and the reconfig encoder therefore have no byte-exact validation.
 
-**Next, offline:** the individual input paths behind the 17-entry table (to map `field0` to event kinds and settle absolute vs normalised coordinates), the `0x70` subtype branch, `CConnectBase::HandleEvent`, the trailing "extra data" block and the capability/`diff_jpeg` parser. **Next, needing the iPad connected:** observing actual inbound records, which requires someone touching the iPad screen while a capture runs. See [steady state](fedora-steady-state.md).
+**Fact (2026-11-08, offline continuation):** the input event kinds are mapped — the six 7-byte stubs set exactly the Win32 `MOUSEEVENTF_*` button constants, coordinates are absolute over the virtual desktop normalised to 0..65535 by the constant 65535.0, and the full transform `((value + monitor_origin - desktop_origin) / desktop_span) * 65535` is decoded. Input is three subsystems: mouse and keyboard via `SendInput`, multi-touch via `InitializeTouchInjection`/`InjectTouchInput` with a `ContactID`, plus `CInput::HandleHidMessage`. The handshake's trailing extra-data block is a **JSON** document, and the `diff_jpeg` gate is established — which explains the observed ordinary-JPEG choice, because the captured body is not valid JSON. `CConnectBase::HandleEvent` handles exactly five of 201 event ids, and TLV `0x70` enqueues id `0xc9`.
+
+**Next, offline:** `field0` 10's path and the 16/17 `ProcControlMessage` body; the touch-injection path and `CInput::HandleHidMessage`; the indirect vtable targets behind the five `HandleEvent` cases, which is what the `0x70` purpose hinges on; and the `CEncoderVideoSRx264` alternative codec. **Next, needing the iPad connected:** observing actual inbound records, which requires someone touching the iPad screen while a capture runs. See [steady state](fedora-steady-state.md).
 
 ## Startup handshake decoded — FED-START-E001, 2026-11-07
 

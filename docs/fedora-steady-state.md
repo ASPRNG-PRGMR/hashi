@@ -298,12 +298,49 @@ dimensions yet. That makes the resize message **decoded rather than guessed**.
 the startup sequence this encoder has **no byte-exact validation**. It is decoded,
 not guessed — and also not confirmed. Nothing in this repository transmits it.
 
+## The `0x70` subtype and the internal event dispatcher
+
+**Fact:** the TLV `0x70` subtype does not act directly. RVA `0x2fc2d`–`0x2fc61`
+builds a small event structure, stores **`0xc9` (201)** as its id at RVA
+`0x2fc49`, and makes a virtual call on the global object at `ds:0x5dc104`. So
+`0x70` enqueues an internal event rather than producing a wire message.
+
+**Fact:** `CConnectBase::HandleEvent` at RVA `0x2ef90` logs
+`handle event: %d`, computes `id - 2`, and rejects anything above `0xc8` — so
+ids **2..202** reach the dispatcher. It then indexes a 201-entry **byte** table
+at VA `0x42f134` into a 6-entry case table at VA `0x42f11c`.
+
+**Fact:** exactly **five** ids get their own case; the other 196 in range fall to
+the default at RVA `0x2f110`:
+
+| Event id | Case target RVA |
+| --- | --- |
+| 2 (`0x02`) | `0x2f060` |
+| 4 (`0x04`) | `0x2f0a2` |
+| 26 (`0x1a`) | `0x2f0e0` |
+| **201 (`0xc9`)** | `0x2efdc` — the id the TLV `0x70` subtype enqueues |
+| 202 (`0xca`) | `0x2f01e` |
+
+A useful cross-check fell out of this: objdump renders the byte table region as a
+run of `add eax,0x5050505`, which is simply the repeated default index `0x05`
+being disassembled as code. That independently confirms the table was read
+correctly.
+
+**Limitation — an honest stopping point.** Four of the five cases end in
+`call edx`, an indirect virtual call, and case 3 (the `0x70`-reachable one) at
+RVA `0x2efdc` only forwards the event's three fields and re-tags it `0xc9`. So
+the chain from the TLV `0x70` subtype to any concrete action leaves this slice
+through a vtable that static analysis here cannot resolve. `SendReconfigVideo`
+is **not** called directly from any of these cases. The `0x70` subtype's purpose
+therefore remains unestablished, and should not be guessed from the fact that
+`0x71` is logged as a video type.
+
 ## Implementation
 
 `hashi_stream.py`, with `tests/test_hashi_stream.py`. It performs no I/O, opens
 no socket and talks to no device. `hashi_framing.py` and `hashi_startup.py` are
 reused unchanged — the outbound encoder round-trips through the existing
-validated parser. Suite is 90 tests.
+validated parser. Suite is 94 tests.
 
 ## What remains, and what it would cost
 
@@ -313,7 +350,9 @@ Answerable offline from the agent already present:
   that reads `field2` as two packed 16-bit halves.
 - The touch-injection path and its `ContactID` handling, plus
   `CInput::HandleHidMessage`.
-- The `0x70` subtype branch, and `CConnectBase::HandleEvent`.
+- The indirect vtable targets behind the five `HandleEvent` cases, which is what
+  the `0x70` subtype's purpose hinges on. This needs the vtable owner resolved,
+  not more of the same function.
 - The differential-JPEG *payload* format. Its negotiation gate is now
   established (see the handshake report), but no session has enabled it, so what
   the path transmits is still unknown.

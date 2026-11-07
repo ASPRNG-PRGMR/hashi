@@ -345,3 +345,33 @@ class InputEventKindTests(unittest.TestCase):
             TOUCH_INJECTION_SYMBOLS,
             ("InitializeTouchInjection", "InjectTouchInput"),
         )
+
+
+class InternalEventTests(unittest.TestCase):
+    """CConnectBase::HandleEvent dispatch. Static only; nothing observed."""
+
+    def test_only_five_ids_are_handled(self):
+        from hashi_stream import EVENT_HANDLED, event_is_handled
+        self.assertEqual(sorted(EVENT_HANDLED), [0x02, 0x04, 0x1A, 0xC9, 0xCA])
+        for ev in EVENT_HANDLED:
+            self.assertTrue(event_is_handled(ev))
+
+    def test_in_range_but_unhandled_ids_fall_to_the_default(self):
+        from hashi_stream import EVENT_ID_MAX, EVENT_ID_MIN, event_is_handled
+        unhandled = [e for e in range(EVENT_ID_MIN, EVENT_ID_MAX + 1)
+                     if not event_is_handled(e)]
+        self.assertEqual(len(unhandled), 196)
+
+    def test_range_bounds(self):
+        from hashi_stream import EVENT_ID_MAX, EVENT_ID_MIN, event_is_handled
+        self.assertEqual((EVENT_ID_MIN, EVENT_ID_MAX), (2, 202))
+        for ev in (0, 1, 203, 1000):
+            self.assertFalse(event_is_handled(ev))
+
+    def test_the_tlv_subtype_70_event_is_one_of_the_handled_five(self):
+        from hashi_stream import (
+            EVENT_FROM_TLV_SUBTYPE_70, TLV_SUBTYPE_70, event_is_handled,
+        )
+        self.assertEqual(TLV_SUBTYPE_70, 0x70)
+        self.assertEqual(EVENT_FROM_TLV_SUBTYPE_70, 0xC9)
+        self.assertTrue(event_is_handled(EVENT_FROM_TLV_SUBTYPE_70))
