@@ -23,6 +23,18 @@ The goal is not to clone Splashtop's software — it's to speak its wire protoco
 
 ## Current Status — Read This First When Resuming
 
+**2026-11-07 update — this is the current resume point. Everything dated earlier in this section is historical.**
+
+**Fact:** The prerequisite-skills phase and the REA/Ghidra study check are **complete**; do not restart them and do not rebuild the study DLL. Phase 1 capture is complete and reproduced offline: the application record boundary (one tag byte + BE24 length), 1,903 tag-6 JPEG records at 1280×960, and twelve decoded pixel-matched samples. See [Windows startup framing](docs/windows-startup-framing.md) and FED-FRAME-E001.
+
+**Fact:** The live capture backend is established. On the working Windows installation the active captor was **LCI** (vtable RVA `0x1ac4b4`) and the encoder was **ordinary JPEG** (vtable RVA `0x1ac818`), recorded as WIN-BACKEND-E001–E004.
+
+**Fact:** The sizing question is resolved structurally as FED-MODE-E001: the dimensions reaching the encoder are the selected monitor's `rcMonitor` extent from `GetMonitorInfoW`, and the captured LuminonCore rectangle `[1920,0,3200,960]` gives exactly the observed 1280×960. The captor cannot set the mode in an LCI configuration, the agent's own best-mode scorer selects 1600×1200 rather than 1280×960 for this client, and the mode already existed before the traced window. What remains is narrowed, not open: see [mode-selection chain](docs/fedora-mode-selection.md).
+
+**Fact:** Repository code is now `hashi_framing.py` (validated record/JPEG-header parser) and `hashi_mode.py` (FED-MODE-E001 dimension rules, with the reconstructed `FindBestResolution` scorer marked **Inference** and not wired into anything), with 21 passing tests in `tests/`. **There is still no Linux host implementation and no validated application protocol beyond the record boundary.** No guessed handshake, resize, codec or control message has been implemented, and none should be.
+
+**Resume from:** [Model handoff](MODEL-HANDOFF.md), then [Fedora next steps](docs/fedora-next-steps.md). Returning to Windows instead: [RETURN-TO-WINDOWS.md](RETURN-TO-WINDOWS.md). The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
+
 **Returning to Windows with the private transfer ZIP:** Start with [RETURN-TO-WINDOWS.md](RETURN-TO-WINDOWS.md). Include the ignored `hashi-stuff/` folder in that private transfer; it contains the Windows artifacts and new Fedora evidence bundle.
 
 **2026-11-01 update:** Start with [Fedora next-session handoff](docs/fedora-next-steps.md) and [Fedora investigation](docs/fedora-investigation.md). **Fact:** HASHI still has no Linux host implementation or validated application protocol. The Windows handoff corrections and newer Windows/Fedora observations supersede the historical roadmap below; Windows runtime behavior has not been reproduced on Fedora.
