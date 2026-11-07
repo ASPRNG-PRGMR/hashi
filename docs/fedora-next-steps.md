@@ -1,5 +1,11 @@
 # HASHI: next session after Fedora static inspection
 
+## Mode-selection chain resolved — FED-MODE-E001, 2026-11-07
+
+**Fact:** The open sizing question from WIN-BACKEND-E003/E004 is now answered structurally. The dimensions the encoder receives are the selected monitor's `rcMonitor` extent from `GetMonitorInfoW`; `[1920,0,3200,960]` yields exactly the observed 1280×960. The captor's only mode-setting routines are gated off in any LCI configuration, the agent's own best-mode scorer selects 1600×1200 rather than 1280×960 for this client, and the 1280×960 mode already existed before the traced window opened. Full addresses, the reconstructed score formula, the remaining unknowns and the exact later-test evidence are in [mode-selection chain](fedora-mode-selection.md); the established rules are implemented in `hashi_mode.py` with tests beside the reused framing parser.
+
+**Next:** Two **read-only** Windows checks are now the cheapest path and may close the question without instrumentation: a full value enumeration under `HKCU\Software\Splashtop Inc.\Splashtop Wired XDisplay` in both views (settling `ForceResW`/`ForceResH`, which the 2026-11-06 snapshot never queried), and the persisted mode for the `LCI\IDDCX` device. Any instrumentation must span a genuine **detached → attached** transition, because a reconnect with the display already attached contains no mode decision to observe. The superseded plans below — further transport/framing work, the REA study check and the generic "instrument the mode boundary on reconnect" item — should not be repeated. Alternate captors, differential JPEG negotiation, the startup field 5 and a full interoperable host remain open. Do not implement guessed messages or replay Fedora startup to the iPad.
+
 ## Fedora import of the backend transfer — 2026-11-07
 
 **Fact:** The Windows backend transfer was received and verified on Fedora. See

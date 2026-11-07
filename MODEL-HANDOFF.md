@@ -1,56 +1,133 @@
 # HASHI continuation prompt
 
-Copy the prompt below into the next model's session. It assumes the same working directory, repository and private evidence remain available. The commit containing this file also records the completed REA connection check and dimension/encoder investigation; its parent is `26fc99c`. Inspect the actual Git state rather than inventing a commit hash or assuming later edits are absent.
+Copy the prompt below into the next model's session. It assumes the same working
+directory, repository and private evidence remain available. **Inspect the actual
+Git state rather than inventing a commit hash or assuming later edits are absent.**
 
 ---
 
-Continue HASHI in `/home/noobiegg/Documents/github-stuff/hashi` on Fedora. Preserve the current repository, private evidence and working Windows installation. Read any applicable repository instructions, inspect `git status` and recent commits, then read `docs/fedora-startup-validation.md` completely and the current update at the top of `RETURN-TO-WINDOWS.md`. Read `docs/windows-startup-framing.md` for the existing capture boundary. Current findings supersede the historical REA-disconnected and downstream-analysis TODO statements in older handoffs.
+Continue HASHI in `/home/noobiegg/Documents/github-stuff/hashi` on Fedora.
+Preserve the current repository, private evidence and working Windows
+installation. Read any applicable repository instructions, inspect `git status`,
+the branch, remotes and recent commits, then read
+`docs/fedora-mode-selection.md`, the top of `docs/fedora-startup-validation.md`,
+the top of `docs/fedora-next-steps.md` and the top of `RETURN-TO-WINDOWS.md`.
+`docs/windows-startup-framing.md` holds the existing capture boundary and
+`docs/fedora-backend-import.md` the import receipt. Label meaningful conclusions
+**Fact**, **Inference** or **Hypothesis**, and keep evidence IDs, hashes, UTC
+timestamps, RVAs and limitations.
 
 ## Completed work: do not restart it
 
-- The Windows capture was imported and reproduced offline: exact stream consumption, 1,903 1280×960 JPEG records, and twelve decoded samples matching independently checked desktop changes.
-- The actual Codex REA MCP connection passed, reporting REA 6.8.0, Ghidra 12.1.4 and an aligned `codex-mcp-client`. The unchanged study DLL was opened, its returned `hashi_add` and `hashi_tick` addresses analyzed, evidence exported, and the session closed. Final session status was `open=false`, `cleanup_pending=false`.
-- The DLL was **not rebuilt**. `hashi_tick` retains the `GetTickCount` EAX return despite Ghidra's incorrect `void` pseudocode. Recovered types and no-return annotations are not authoritative; check decisive instructions.
-- The vendor field trace is documented as FED-SIZE-E001–E003. No vendor target was executed on Fedora and no protocol messages were implemented or transmitted.
+- The Windows capture, framing and image validation are complete:
+  WIN-START-E001–E005 and FED-FRAME-E001. 1,903 tag-6 JPEG records, exact
+  record boundary, twelve decoded pixel-matched samples.
+- The live REA/Ghidra study check is complete and **must not be repeated**; the
+  study DLL must not be rebuilt.
+- The Windows backend observation is complete: WIN-BACKEND-E001–E004. The live
+  captor was **LCI** (vtable RVA `0x1ac4b4`) and the encoder was **ordinary
+  JPEG** (vtable RVA `0x1ac818`). `InitCaptor`'s failed-initialization fallback
+  is **StVD** (`0x37f10`), correcting the older OSBase claim.
+- The mode-selection chain is traced: **FED-MODE-E001**. See below. Do not
+  re-derive it.
+- The 2026-11-07 backend transfer is imported and fully verified (138 payloads,
+  98 indexed files, bundle fast-forwarded to `4193abc`). The archive was
+  deleted after verification; do not look for it.
+
+## What FED-MODE-E001 settled
+
+**Fact:** The output dimensions reaching ordinary JPEG initialization are the
+selected monitor's `rcMonitor` extent from `GetMonitorInfoW` — record append
+`0x3ca00` stores `right - left` at record `+0x10` and `bottom - top` at `+0x14`;
+getters `0x3cde0`/`0x3ce50` feed shared `+0x1c`/`+0x20`. The LuminonCore
+rectangle `[1920,0,3200,960]` gives exactly the observed 1280×960. The captor
+reads the mode; it does not request it.
+
+**Inference:** `CCaptor::CustomizeResolution` `0x32590` and `RestoreResolution`
+`0x32830` are the captor's only `ChangeDisplaySettingsExW` paths and both require
+`shared[+0x44] != 0`, while the LCI rung requires `+0x44 == 0` and `MirrorMode`
+was 0 — so they cannot have set the mode. `CMultiDisplay::FindBestResolution`
+`0x42530`, reconstructed from instructions, selects 1600×1200 rather than
+1280×960 for this client.
+
+**Fact:** The mode was already 1280×960 at `16:15:46Z`, before the
+`16:17:54Z`–`16:19:55Z` trace window. A reconnect that starts with the display
+already attached contains no mode decision to observe.
+
+**Open:** where `AttachExtendDisplay`'s requested size comes from; whether it ran
+in the observed session; `ForceResW`/`ForceResH` state (never queried, so
+*unknown*, not absent); the enumerator's ordering contract; whether the
+reconstructed score formula is numerically exact on Windows.
 
 ## Private evidence and identity
 
-Let D be `/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z`.
+Let `D` be `/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z`
+and `B` be `/home/noobiegg/HASHI-private/imports/backend-20261107-20261107T170633Z`.
 
-- Original evidence: `D/bundle`, verified unchanged against `D/hashi-initial-verification.json`: 1,993 files and 512 directories. Do not alter, replace or clean it up.
-- New analysis R: `D/analysis/rea-dimensions-20261105T140157Z`. Read its `evidence-index.json`, `integrity-receipt.json`, `preservation-receipt.json`, `export-checks.json` and session identity receipts. All 25 indexed files and the index were copied and hash-verified; the durable preservation receipt is additional. Private directory mode is 0700 and files are 0600.
-- `R/study-evidence.json`: seven REA records. `R/agent-evidence.json`: 47 REA records. Bounded assembly extracts, RTTI verification and the instruction search index remain private. Use these before repeating analysis.
-- Agent: `D/bundle/private-evidence/windows-runs/20261031-184820/binaries/SWXDAgent.exe`, SHA-256 `cb9ab63be48947344e6d0e5e718e5522e707c64473dac6cc026149424964e52c`.
-- Study DLL: `D/bundle/private-evidence/windows-runs/20261031-184820/study-build/ex06_hashi.dll`, SHA-256 `6ccab14ea52e7b5f9d858bc98be43a946ca48f68083a1f54a76c0d0524546786`. Preserve it; do not rebuild it.
-- Startup capture: `D/bundle/private-evidence/windows-runs/startup-20261105-103819`. Earlier runs and negative controls remain preserved.
-- Temporary working evidence also remains at `/tmp/hashi-rea-20261105-mKbn3t`; prefer the durable copy. Its preservation script deliberately refuses an existing destination. Do not rerun it as an update mechanism.
+- `D/bundle` holds the original verified Windows evidence (1,993 files, 512
+  directories) plus the agent and study DLL. Do not alter, replace or clean it up.
+- `B/bundle` holds the 2026-11-07 transfer: `private-evidence/backend-20261106`
+  with its verified 98-file `evidence-index.json`
+  (SHA-256 `f9fcdb8493d4dd8c30c6827b660ab7cf01d87e5d9171ef6cd1f4e5b29fd8981b`),
+  the retained **failed** first probe, raw traces and receipts.
+  `B/import-verification-receipt.json` records the whole import.
+- `B/analysis/mode-chain-20261107T171124Z` is the FED-MODE-E001 run; its
+  `evidence-index.json` has SHA-256
+  `d107f65f6638bc2a6eefb09a7f16738979fdc5d3f6dcca8325396f90fccfe153`. It holds
+  the focused asm extracts, the full private disassembly and the score
+  reconstruction. Read it before repeating any static work.
+- Agent: `D/bundle/private-evidence/windows-runs/20261031-184820/binaries/SWXDAgent.exe`,
+  SHA-256 `cb9ab63be48947344e6d0e5e718e5522e707c64473dac6cc026149424964e52c`,
+  `pei-i386`, preferred base `0x400000`. **Never execute it.** Static
+  disassembly with `objdump` on Fedora is how it has been read so far.
+- Study DLL: `D/bundle/.../study-build/ex06_hashi.dll`, SHA-256
+  `6ccab14ea52e7b5f9d858bc98be43a946ca48f68083a1f54a76c0d0524546786`. Preserve;
+  do not rebuild.
 
-Do not stage binaries, raw captures, decompiler output, private receipts or instrumentation artifacts. Create a fresh private run for new work. Respect the actual filesystem permissions; writing outside the workspace may require escalation even though preserving private evidence is authorized. No push or publication is requested.
+Private directories are 0700 and files 0600. Do not stage binaries, raw
+captures, decompiler output, receipts or instrumentation artifacts; `.gitignore`
+covers `/hashi-stuff/`, `__pycache__/` and `*.pyc`, and private evidence lives
+entirely outside the checkout. Create a fresh private run directory for new work
+rather than writing into an existing one.
 
-## What the dimension and capability trace actually establishes
+## Repository code
 
-All vendor code locations below are module-relative **RVAs**. The static preferred base is `0x400000`; add the actual loaded module base for Windows hooks. Do not confuse the connection object's `+0x1c` shared-state pointer with the shared state's `+0x1c` width. Capture objects hold that shared state at `+0x88`.
-
-| Shared-state fields | Established use |
-| --- | --- |
-| `+0x14/+0x18` | Client dimensions, initially 2048×1536 in the capture; also mutable through later event handling |
-| `+0x1c/+0x20` | Current capture/encoder dimensions, passed into encoder initialization |
-| `+0x40` | Header representation flag in the inspected send path |
-| `+0x64` | Encoder selector with priority over `+0x68`; zero takes the JPEG family, nonzero selects SRx264 |
-| `+0x68` | Chooses differential JPEG when `+0x64` is zero; otherwise ordinary JPEG is selected |
-
-The sizing helper at RVA `0x31400` maps 2048×1536 to an initial **1600×1200** request. In the LCI path, initialization at `0x35d60` calls that helper at `0x35f0c`, then calls `UpdateMonitorInfo` at `0x36163` before encoder creation at `0x363a3`. `UpdateMonitorInfo` (`0x35b30`) overwrites output dimensions at `0x35c4c/0x35c63` with selected-monitor measurements. Generic monitor refresh (`0x324d0`) does the same through another capture path. Encoder selection is at `0x31900`; ordinary JPEG initialization is at `0x3b750`, with encoding at `0x3b830`.
-
-The existing capture proves a 1280×960 desktop and 1280×960 JPEGs. It does **not** prove which captor ran or why Windows/the driver selected 1280×960. Do not present a fixed 5/8 scale, a DPI-caused 4/5 scale, or the LCI intermediate size as observed runtime values. The LuminonCore adapter's presence alone does not prove LCI capture selection.
-
-The captured capability body begins with NUL and bypasses the inspected `diff_jpeg` key path. It does not establish successful differential-JPEG negotiation. Tag 6 alone does not distinguish ordinary from differential JPEG in the static selector. The separately transmitted native-order constant 5 still has unknown meaning. Alternate modes remain unobserved.
+`hashi_framing.py` is the validated record-boundary and JPEG-header parser;
+`hashi_mode.py` holds the FED-MODE-E001 dimension rules, with the reconstructed
+`FindBestResolution` scorer clearly marked **Inference** and deliberately not
+wired into anything. Tests live in `tests/` and are run with
+`python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode` (21 tests,
+passing). Reuse these rather than rewriting them.
 
 ## Next task, in order
 
-1. Review the retained evidence and prepare a **bounded, passive Windows observation** that can resolve the runtime branch/value gap. Work on Fedora first. Reuse the existing capture tools and matching-build boundaries; inspect their code before extending them. If more static analysis is necessary, discover the currently advertised REA schemas, verify the agent hash, inspect only the missing functions, export new evidence privately and close the session. A healthy connection does not require reinstalling tools or repeating the study exercise.
-2. Prepare a reviewable probe and exact run instructions that record the actual capture-class vtable and shared-state identity; the listed dimension/representation/selector fields at encoder selection and initialization; and, **only if LCI runs**, the sizing-helper return and monitor-refresh output. Decode the actual x86 calling conventions from instructions; do not assume every method is ordinary `thiscall`. Bound duration and data volume, preserve original timestamps and hashes, and detach cleanly. Read values; do not mutate them or send extra traffic.
-3. Plan correlation with the selected monitor/device, available and current Windows display modes, monitor rectangle, agent/calling-thread DPI context, and the already validated JPEG boundary. Separate an initial requested size from the mode actually applied and later refreshed values. Avoid capturing extra screen content when dimensions and metadata suffice.
-4. The current environment is Fedora. Do not assume Windows is remotely reachable or execute transferred Windows tools here. Complete offline preparation first. If the observation still requires access to the working Windows session or a controlled normal reconnection, explain the exact remaining action and why, then request only that prerequisite. Do not repeat a cable cycle merely to re-prove framing, transport or the REA study check.
-5. After actual runtime evidence exists, reconcile it into the report with explicit facts, inferences and remaining unknowns. If it does not establish the backend/mode decision, say so. Broader protocol interoperability and alternate capability semantics are later tasks; do not implement guessed handshake, resize, codec or control messages.
+1. Continue offline. Resolve the callers of `CMultiDisplay::AttachExtendDisplay`
+   and where its requested width/height originate, statically, from the agent
+   already present. That is the last substantial question answerable without
+   Windows.
+2. Classify the remaining `ChangeDisplaySettingsExW` references outside the
+   captor and `CMultiDisplay` clusters, so the claim that the captor cannot set
+   the mode is bounded by evidence rather than by the slice examined.
+3. Only then consider Windows. The two **read-only** checks come first and may
+   close the question with no instrumentation: a full value enumeration under
+   `HKCU\Software\Splashtop Inc.\Splashtop Wired XDisplay` in both registry
+   views, and the persisted mode for the `LCI\IDDCX` device. Request only that.
+4. If instrumentation is still needed, it must span a genuine **detached →
+   attached** transition with the pre-state recorded as detached, hooking
+   `FindBestResolution` entry/return, the agent's own
+   `Find resolution: %d for (%d,%d)[%d]` log lines, and
+   `ChangeDisplaySettingsExW` at `0x41364` with the commit at `0x4137a`. Verify
+   byte guards against the loaded image, bound duration and volume, read values
+   without mutating them, and detach cleanly.
+5. Reconcile any new evidence into the reports with explicit Facts, Inferences
+   and remaining unknowns. If it does not establish the decision, say so.
 
-Deliver the concrete next experiment/probe and its validation, or the resulting bounded observations if Windows access is actually available and authorized. Preserve private evidence and leave a clear continuation state. This prompt does not authorize changing drivers, display settings, pairing, the vendor installation, or protocol behavior to force an outcome.
+## Constraints
+
+Do not execute transferred Windows binaries. Do not change drivers, display
+settings, pairing or the vendor installation. Do not send a Fedora-side startup
+replay to the iPad — the user declined that path. Do not implement guessed
+handshake, resize, codec or control messages. Do not repeat a cable cycle to
+re-prove framing, transport or the study check. Do not push without explicit
+instruction; no push has been requested, and `refs/backup/pre-backend-import-20261107`
+retains the pre-import head.
