@@ -54,10 +54,17 @@ was 0 — so they cannot have set the mode. `CMultiDisplay::FindBestResolution`
 `16:17:54Z`–`16:19:55Z` trace window. A reconnect that starts with the display
 already attached contains no mode decision to observe.
 
-**Open:** where `AttachExtendDisplay`'s requested size comes from; whether it ran
-in the observed session; `ForceResW`/`ForceResH` state (never queried, so
-*unknown*, not absent); the enumerator's ordering contract; whether the
-reconstructed score formula is numerically exact on Windows.
+**Fact (user-reported):** the 1280×960 mode was the **user's own choice** in
+Windows display settings — the size they want for the iPad — persisted by Windows
+for `LCI\IDDCX`. **The sizing question is closed and needs no Windows access.**
+Do not plan a registry check, a persisted-mode check, an attach transition or any
+instrumentation for it. `ForceResW`/`ForceResH` stay unqueried but cannot matter
+(`CustomizeResolution` needs `MirrorMode != 0`; LCI needs `MirrorMode == 0`).
+
+**Still open, all answerable offline:** where `AttachExtendDisplay`'s requested
+size comes from; the unclassified `ChangeDisplaySettingsExW` sites; the
+enumerator's ordering contract; whether the reconstructed score formula is
+numerically exact.
 
 ## Private evidence and identity
 
@@ -99,28 +106,25 @@ wired into anything. Tests live in `tests/` and are run with
 `python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode` (21 tests,
 passing). Reuse these rather than rewriting them.
 
-## Next task, in order
+## Next task, in order — there is no pending Windows work
 
-1. Continue offline. Resolve the callers of `CMultiDisplay::AttachExtendDisplay`
-   and where its requested width/height originate, statically, from the agent
-   already present. That is the last substantial question answerable without
-   Windows.
-2. Classify the remaining `ChangeDisplaySettingsExW` references outside the
-   captor and `CMultiDisplay` clusters, so the claim that the captor cannot set
-   the mode is bounded by evidence rather than by the slice examined.
-3. Only then consider Windows. The two **read-only** checks come first and may
-   close the question with no instrumentation: a full value enumeration under
-   `HKCU\Software\Splashtop Inc.\Splashtop Wired XDisplay` in both registry
-   views, and the persisted mode for the `LCI\IDDCX` device. Request only that.
-4. If instrumentation is still needed, it must span a genuine **detached →
-   attached** transition with the pre-state recorded as detached, hooking
-   `FindBestResolution` entry/return, the agent's own
-   `Find resolution: %d for (%d,%d)[%d]` log lines, and
-   `ChangeDisplaySettingsExW` at `0x41364` with the commit at `0x4137a`. Verify
-   byte guards against the loaded image, bound duration and volume, read values
-   without mutating them, and detach cleanly.
-5. Reconcile any new evidence into the reports with explicit Facts, Inferences
-   and remaining unknowns. If it does not establish the decision, say so.
+1. **Decode the startup state machine at RVA `0x303f0`.** One 0x792-byte,
+   563-instruction function holds every observed host→iPad send (`0x30476`,
+   `0x30592`, `0x306e7`, `0x30837`) plus reply handling; receive helper is
+   `0x112e8`. The agent *is* the host, so this is host-side protocol logic.
+   Establish per-field semantics, which replies are validated and how, failure
+   and timeout behaviour, and the meaning of the `05 00 00 00` bytes in the
+   fourth send. Static only.
+2. **Build a byte-exact offline harness.** Re-serialise the captured outgoing
+   stream from the host-side model and diff against the capture bytes. This
+   validates an implementation without sending anything to the iPad, and keeps
+   step 1's inferences from drifting into assumption.
+3. `AttachExtendDisplay` callers and the unclassified `ChangeDisplaySettingsExW`
+   sites, to bound the FED-MODE-E001 claim by evidence.
+4. The capability/`diff_jpeg` parser, and the constant DQT/DHT tables and 4:2:0
+   sampling a host would emit (already established across all 1,903 frames).
+5. Reconcile new evidence with explicit Facts, Inferences and unknowns. Target
+   size for the host is **1280×960**, the user's stated requirement.
 
 ## Constraints
 

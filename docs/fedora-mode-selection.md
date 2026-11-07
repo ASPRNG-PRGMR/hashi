@@ -158,11 +158,23 @@ it did not establish it. A probe of a reconnect that starts from an
 already-attached display cannot capture the mode decision, because no decision
 occurs in that window.
 
-**Inference:** the decision belongs to an earlier display-attach event, driver
-default or persisted Windows configuration for `LCI\IDDCX`. Candidate mechanisms
-remain `CMultiDisplay::AttachExtendDisplay`'s `ChangeDisplaySettingsExW` pair, a
-`CDS_UPDATEREGISTRY` value persisted by a previous session, or an
-`IddCx`/driver-side preferred mode. This static slice does not choose between them.
+**Fact (user-reported, 2026-11-07):** The user set the Windows extended display
+to 1280×960 themselves, in Windows display settings, because that is the size
+they want for the iPad. That is the cause. Windows persisted the chosen mode for
+`LCI\IDDCX`, which is why the snapshot already showed it before the trace window
+opened and why no agent code path had to select it.
+
+This closes the question, and it is consistent with every independent
+observation: 1280×960 is present in the adapter's enumerated mode list, it
+pre-dated the trace, the captor's mode-setting routines were gated off, and the
+agent's own scorer would have asked for 1600×1200. The earlier speculation about
+a driver default or an `AttachExtendDisplay`-persisted value is superseded and
+should not be pursued.
+
+**Note on label:** this is user-reported, not machine-observed in this
+repository's evidence. It is reliable for the purpose it serves — explaining the
+provenance of a number whose *mechanism* is already established as Fact — but it
+is not a captured measurement, and nothing in the implementation depends on it.
 
 ## What is still unknown
 
@@ -179,30 +191,33 @@ remain `CMultiDisplay::AttachExtendDisplay`'s `ChangeDisplaySettingsExW` pair, a
   derived from instructions and validated only against the observed 1600×1200
   sizing-helper result, not against the agent's own per-candidate log lines.
 
-## Exact evidence a later live test would need
+## No further live test is needed for this question
 
-Ordered cheapest-first. None of this is authorised or requested here; it is the
-minimum that would settle the remaining question.
+**Fact:** The provenance question is answered by the user's own display-settings
+choice (above), so the read-only registry and persisted-mode checks previously
+listed here are no longer required. `ForceResW`/`ForceResH` remain unqueried and
+therefore of unknown state, but they cannot matter: `CustomizeResolution` is
+gated behind `MirrorMode != 0` while LCI capture requires `MirrorMode == 0`, so
+no value of that pair can affect an LCI session.
 
-1. **Read-only registry enumeration.** Enumerate *all* value names and data under
-   `HKCU\Software\Splashtop Inc.\Splashtop Wired XDisplay` in both the 32- and
-   64-bit views and persist the enumeration. This settles `ForceResW`/`ForceResH`
-   and any unknown siblings. No instrumentation, no mode change, no attach cycle.
-2. **Read-only persisted-mode check.** Record the saved mode for the `LCI\IDDCX`
-   device from the Windows display configuration, to test whether 1280×960 is a
-   persisted `CDS_UPDATEREGISTRY` value rather than a fresh decision.
-3. **An attach transition, not another reconnect.** The decision only occurs when
-   the extended display goes from detached to attached. Any probe must span that
-   transition, with the pre-state recorded as detached.
-4. **One narrow instrumentation boundary**, if 1–3 leave it open: entry and return
-   of `FindBestResolution` (`0x42530`) recording `reqW`, `reqH` and the returned
-   pair; the agent's own per-candidate `Find resolution: %d for (%d,%d)[%d]` log
-   output to check the reconstructed formula; and the `ChangeDisplaySettingsExW`
-   call at `0x41364` plus the commit at `0x4137a` with their arguments and return
-   codes. Verify byte guards against the loaded image first, bound the duration,
-   read values only, and detach cleanly.
+**Consequence for the host.** A Linux host does not discover this size, it
+*chooses* it: it creates the virtual display and therefore sets the extent that
+its own capture and encoder use. 1280×960 is the user's stated target. The
+established rule — encoder dimensions equal the selected monitor's `rcMonitor`
+extent — is what a host must stay self-consistent with, not a value it must
+negotiate.
 
-Items 1 and 2 are read-only and would likely resolve the question without any
-instrumentation. Nothing here justifies changing a driver, a display setting or
-the vendor installation, and nothing here requires a Fedora-side replay to the
-iPad.
+## What remains genuinely unknown
+
+These are unrelated to the resolved sizing question and are answerable from the
+binary already present, with no Windows access:
+
+- The origin of `AttachExtendDisplay`'s requested width/height, i.e. its callers.
+- Classification of `ChangeDisplaySettingsExW` references outside the captor and
+  `CMultiDisplay` clusters, which would bound the claim that the captor cannot
+  set the mode by evidence rather than by the slice examined.
+- Whether the reconstructed `FindBestResolution` score formula is numerically
+  exact. It was derived from instructions and checked only against the observed
+  1600×1200 sizing-helper result, never against the agent's own per-candidate log.
+- The ordering contract of the agent's preferred monitor enumerator versus
+  `EnumDisplayMonitors`, which the selected-index inference rests on.
