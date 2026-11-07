@@ -279,7 +279,9 @@ class InputEventKindTests(unittest.TestCase):
             4: "mouse-move", 7: "mouse-move",
             5: "mouse-button", 6: "mouse-button", 8: "mouse-button",
             9: "mouse-button", 14: "mouse-button", 15: "mouse-button",
-            10: "other",
+            # field0=10 was "other" from static analysis alone; FED-LIVE-E001
+            # observed it carrying motion coordinates.
+            10: "pointer-motion",
             16: "control-message", 17: "control-message",
         }
         for f, kind in expected.items():
@@ -375,3 +377,57 @@ class InternalEventTests(unittest.TestCase):
         self.assertEqual(TLV_SUBTYPE_70, 0x70)
         self.assertEqual(EVENT_FROM_TLV_SUBTYPE_70, 0xC9)
         self.assertTrue(event_is_handled(EVENT_FROM_TLV_SUBTYPE_70))
+
+
+class ObservedInputTests(unittest.TestCase):
+    """FED-LIVE-E001: confirmed against the real iPad, not static only."""
+
+    def test_pointer_event_constants(self):
+        from hashi_stream import POINTER_DOWN, POINTER_MOTION, POINTER_UP
+        self.assertEqual((POINTER_DOWN, POINTER_UP, POINTER_MOTION), (5, 6, 10))
+
+    def test_down_and_up_are_the_statically_decoded_button_flags(self):
+        # The live capture showed 5/6 as down/up, which is exactly what the
+        # static MOUSEEVENTF constants predicted.
+        from hashi_stream import (
+            MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, POINTER_DOWN, POINTER_UP,
+            mouse_flags_for,
+        )
+        self.assertEqual(mouse_flags_for(POINTER_DOWN), MOUSEEVENTF_LEFTDOWN)
+        self.assertEqual(mouse_flags_for(POINTER_UP), MOUSEEVENTF_LEFTUP)
+
+    def test_motion_is_now_classified_rather_than_other(self):
+        from hashi_stream import input_kind
+        self.assertEqual(input_kind(10), "pointer-motion")
+
+    def test_an_observed_record_parses_to_its_logged_values(self):
+        # Verbatim from the live capture: a pointer-down at (361, 336).
+        from hashi_stream import parse_tlv_record
+        raw = bytes.fromhex("0700000c000000050000016900000150")
+        rec = parse_tlv_record(raw[:4], raw[4:])
+        self.assertEqual(rec.tlv_type, 7)
+        self.assertEqual((rec.field0, rec.field1, rec.field2), (5, 361, 336))
+        self.assertTrue(rec.handled)
+        self.assertFalse(rec.truncated)
+
+    def test_an_observed_motion_record(self):
+        from hashi_stream import input_kind, parse_tlv_record
+        raw = bytes.fromhex("0700000c0000000a0000016800000157")
+        rec = parse_tlv_record(raw[:4], raw[4:])
+        self.assertEqual((rec.field0, rec.field1, rec.field2), (10, 360, 343))
+        self.assertEqual(input_kind(rec.field0), "pointer-motion")
+
+    def test_observed_records_were_all_type_7_and_sixteen_bytes(self):
+        # All 1,449 live records were TLV type 7 with a 12-byte payload, so the
+        # header is always 07 00 00 0c.
+        from hashi_stream import tlv_payload_is_network_order
+        self.assertTrue(tlv_payload_is_network_order(7))
+        self.assertEqual(bytes.fromhex("0700000c"), b"\x07\x00\x00\x0c")
+
+    def test_observed_coordinates_fit_the_display(self):
+        from hashi_stream import to_virtual_desktop_absolute as abs_
+        # Observed extremes, mapped with no monitor offset onto 1280x960.
+        for x in (3, 1236):
+            self.assertTrue(0 <= abs_(x, 0, 0, 1280) <= 65535)
+        for y in (2, 951):
+            self.assertTrue(0 <= abs_(y, 0, 0, 960) <= 65535)

@@ -352,6 +352,19 @@ KEYBOARD_FIELD0 = (1, 2)
 #: 0x40386, which reads ``field2`` as two packed 16-bit halves.
 CONTROL_MESSAGE_FIELD0 = (16, 17)
 
+#: Pointer/touch down and up, and motion.
+#:
+#: **Fact, observed live (FED-LIVE-E001).** A 45-second capture against the real
+#: iPad recorded 1,449 inbound records: 41 with ``field0 = 5``, 40 with
+#: ``field0 = 6`` and 1,368 with ``field0 = 10``. Downs and ups strictly
+#: alternate, a tap is ``5 -> 6``, and a drag is ``5 -> 10... -> 6``. So 5 and 6
+#: are down and up — matching the statically decoded MOUSEEVENTF_LEFTDOWN and
+#: LEFTUP constants — and **10 is motion**, which static analysis had left as an
+#: unclassified separate path at RVA 0x401c0.
+POINTER_DOWN = 5
+POINTER_UP = 6
+POINTER_MOTION = 10
+
 #: Win32 touch-injection entry points the agent resolves by name. Touch is not
 #: delivered through SendInput.
 TOUCH_INJECTION_SYMBOLS = ("InitializeTouchInjection", "InjectTouchInput")
@@ -416,6 +429,11 @@ def to_virtual_desktop_absolute(
     **Consequence:** incoming coordinates are **monitor-relative pixels**, not
     pre-normalised values. A host must know the monitor's placement inside the
     desktop to place them.
+
+    **Confirmed live (FED-LIVE-E001):** across 1,449 observed records the
+    coordinates spanned x 3..1236 and y 2..951, every value inside the
+    1280x960 display's own pixel space. So the input domain is the display's
+    pixels, exactly as this transform assumes.
     """
     if desktop_span <= 0:
         raise StreamError(f"desktop_span must be positive, got {desktop_span}")
@@ -433,8 +451,9 @@ def input_kind(field0: int) -> str:
     **Fact** for the routing; the labels are the agent's own, from its symbol
     and log strings. ``"ignored"`` means in range but sent to the epilogue.
 
-    **Static only — never observed on the wire.** Returns ``"out-of-range"``
-    above 17, which includes the video subtypes 0x70 and 0x71 handled elsewhere.
+    **Confirmed live for 5, 6 and 10** (FED-LIVE-E001). The remaining
+    classifications are still static only. Returns ``"out-of-range"`` above 17,
+    which includes the video subtypes 0x70 and 0x71 handled elsewhere.
     """
     if field0 in KEYBOARD_FIELD0:
         return "keyboard"
@@ -446,6 +465,8 @@ def input_kind(field0: int) -> str:
         return "ignored"
     if field0 in CONTROL_MESSAGE_FIELD0:
         return "control-message"
+    if field0 == POINTER_MOTION:
+        return "pointer-motion"
     if 1 <= field0 <= INPUT_DISPATCH_MAX:
         return "other"
     return "out-of-range"
