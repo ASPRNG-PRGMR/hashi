@@ -303,6 +303,42 @@ class InputEventKindTests(unittest.TestCase):
         with self.assertRaises(StreamError):
             normalise_absolute(0, 0)
 
+    def test_full_transform_against_the_observed_topology(self):
+        # The captured desktop: LCI monitor \\.\DISPLAY7 at (1920,0) 1280x960,
+        # primary \\.\DISPLAY1 at (0,0) 1536x960, so the virtual desktop spans
+        # x 0..3200 and y 0..960.
+        from hashi_stream import to_virtual_desktop_absolute as abs_
+        # A monitor-relative touch at the LCI origin sits 1920/3200 across.
+        self.assertEqual(abs_(0, 1920, 0, 3200), int(1920 / 3200 * 65535))
+        self.assertEqual(abs_(0, 1920, 0, 3200), 39321)
+        # The far corner of the LCI monitor is the desktop's right edge.
+        self.assertEqual(abs_(1280, 1920, 0, 3200), 65535)
+        # Mid-monitor.
+        self.assertEqual(abs_(640, 1920, 0, 3200), 52428)
+        # The y axis has no offset in this topology.
+        self.assertEqual(abs_(480, 0, 0, 960), 32767)
+
+    def test_monitor_offset_is_what_distinguishes_the_two_displays(self):
+        # The same monitor-relative coordinate maps differently per monitor,
+        # which is why incoming coordinates must be monitor-relative pixels.
+        from hashi_stream import to_virtual_desktop_absolute as abs_
+        self.assertNotEqual(abs_(100, 0, 0, 3200), abs_(100, 1920, 0, 3200))
+
+    def test_full_transform_rejects_coordinates_off_the_desktop(self):
+        from hashi_stream import to_virtual_desktop_absolute as abs_
+        with self.assertRaises(StreamError):
+            abs_(1281, 1920, 0, 3200)   # past the desktop's right edge
+        with self.assertRaises(StreamError):
+            abs_(-1, 0, 0, 3200)
+        with self.assertRaises(StreamError):
+            abs_(0, 0, 0, 0)
+
+    def test_negative_desktop_origin_is_handled(self):
+        # A monitor left of the primary gives a negative desktop origin.
+        from hashi_stream import to_virtual_desktop_absolute as abs_
+        self.assertEqual(abs_(0, -1920, -1920, 3200), 0)
+        self.assertEqual(abs_(1920, -1920, -1920, 3200), int(1920 / 3200 * 65535))
+
     def test_touch_is_a_separate_api_not_sendinput(self):
         from hashi_stream import TOUCH_INJECTION_SYMBOLS
         self.assertEqual(

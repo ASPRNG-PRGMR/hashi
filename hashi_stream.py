@@ -374,22 +374,57 @@ def mouse_flags_for(field0: int) -> int | None:
 
 
 def normalise_absolute(value: int, span: int) -> int:
-    """Normalise a coordinate to the Win32 absolute 0..65535 range.
+    """Normalise a single coordinate to the Win32 absolute 0..65535 range.
 
-    **Partial.** RVA 0x40310-0x40360 computes, per axis, the sum of two
-    object-derived doubles and multiplies by 65535.0 before truncating to an
-    int, then sets ``mi.dwFlags`` to ``MOVE | VIRTUALDESK | ABSOLUTE``. That the
-    target range is 0..65535 over the **virtual desktop** is Fact — the flag and
-    the constant establish it. The exact two getters (RVA 0x40760/0x406e0 for x
-    and 0x407c0/0x40720 for y) were **not** decoded, so the offset-and-scale
-    detail is unknown; this helper implements the plain fraction-of-span form a
-    host would need and must not be presented as the agent's exact arithmetic.
+    Convenience form of :func:`to_virtual_desktop_absolute` with no monitor
+    offset, i.e. for a span that already starts at the desktop origin.
     """
-    if span <= 0:
-        raise StreamError(f"span must be positive, got {span}")
-    if not 0 <= value <= span:
-        raise StreamError(f"value {value} outside span 0..{span}")
-    return int(value / span * ABSOLUTE_COORD_MAX)
+    return to_virtual_desktop_absolute(value, 0, 0, span)
+
+
+def to_virtual_desktop_absolute(
+    value: int, monitor_origin: int, desktop_origin: int, desktop_span: int
+) -> int:
+    """Map one monitor-relative coordinate to a virtual-desktop absolute value.
+
+    **Fact — the full arithmetic, now decoded.** The positioned path at RVA
+    0x40310-0x40360 adds two per-axis doubles and multiplies by 65535.0:
+
+    * the scale term (RVA 0x40760 for x, 0x407c0 for y) is
+      ``value / monitorinfo[+0x1c]`` for x and ``/ monitorinfo[+0x20]`` for y;
+    * the offset term (RVA 0x406e0 for x, 0x40720 for y) is
+      ``(origin_getter() - monitorinfo[+0x0c]) / monitorinfo[+0x1c]`` for x, and
+      the same with ``+0x10`` / ``+0x20`` for y;
+    * the origin getters are RVA 0xcd00 returning the selected monitor record's
+      ``+0x00`` (left) and RVA 0xcd70 returning its ``+0x04`` (top) — the same
+      32-byte records FED-MODE-E001 established.
+
+    Both terms share the denominator, so the whole transform is
+
+    ``((value + monitor_origin - desktop_origin) / desktop_span) * 65535``
+
+    truncated to an int, with ``mi.dwFlags`` set to
+    ``MOVE | VIRTUALDESK | ABSOLUTE``.
+
+    **Inference:** ``monitorinfo[+0x0c]/+0x10`` and ``+0x1c/+0x20`` are the
+    virtual desktop's origin and extent. The `MOUSEEVENTF_VIRTUALDESK` flag
+    requires normalisation across the whole desktop, and adding the selected
+    monitor's origin only makes sense against a desktop-wide denominator, so
+    this reading is strongly supported — but the fields were not independently
+    confirmed to be desktop rather than monitor metrics.
+
+    **Consequence:** incoming coordinates are **monitor-relative pixels**, not
+    pre-normalised values. A host must know the monitor's placement inside the
+    desktop to place them.
+    """
+    if desktop_span <= 0:
+        raise StreamError(f"desktop_span must be positive, got {desktop_span}")
+    offset = value + monitor_origin - desktop_origin
+    if not 0 <= offset <= desktop_span:
+        raise StreamError(
+            f"coordinate {value} maps to {offset}, outside 0..{desktop_span}"
+        )
+    return int(offset / desktop_span * ABSOLUTE_COORD_MAX)
 
 
 def input_kind(field0: int) -> str:

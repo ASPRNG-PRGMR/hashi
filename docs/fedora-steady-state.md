@@ -200,11 +200,40 @@ axis sums two object-derived doubles and multiplies by the constant at VA
 of absolute versus normalised: it is Win32 absolute, which *is* the 0..65535
 normalisation, taken across the whole virtual desktop rather than one monitor.
 
-**Limitation:** the two per-axis getters (RVA `0x40760`/`0x406e0` for x,
-`0x407c0`/`0x40720` for y) were **not** decoded, so the exact offset-and-scale
-arithmetic is unknown. `hashi_stream.normalise_absolute` implements the plain
-fraction-of-span form a host needs and says in its docstring that it is not the
-agent's exact arithmetic.
+**Fact — the full arithmetic, now decoded.** The two per-axis terms are:
+
+* scale (RVA `0x40760` for x, `0x407c0` for y): `value / monitorinfo[+0x1c]`
+  for x, `/ monitorinfo[+0x20]` for y;
+* offset (RVA `0x406e0` for x, `0x40720` for y):
+  `(origin_getter() - monitorinfo[+0x0c]) / monitorinfo[+0x1c]` for x, and the
+  same with `+0x10` / `+0x20` for y;
+* the origin getters are RVA `0xcd00`, returning the selected monitor record's
+  `+0x00` (**left**), and RVA `0xcd70`, returning `+0x04` (**top**) — the same
+  32-byte records FED-MODE-E001 established, whose `+0x10`/`+0x14` hold width
+  and height.
+
+Both terms share a denominator, so the whole transform is
+
+```text
+absolute = ((value + monitor_origin - desktop_origin) / desktop_span) * 65535
+```
+
+truncated to an int. All four getters take the monitor-info structure at
+`[capture+0x88] + 0x70` under the same critical section as the dimension getters.
+
+**Inference:** `monitorinfo[+0x0c]`/`+0x10` and `+0x1c`/`+0x20` are the virtual
+desktop's origin and extent. `MOUSEEVENTF_VIRTUALDESK` requires normalisation
+across the whole desktop, and adding the selected monitor's own origin only makes
+sense against a desktop-wide denominator — so the reading is strongly supported,
+though the fields were not independently confirmed to be desktop rather than
+monitor metrics.
+
+**Consequence, and it matters for a host:** incoming coordinates are
+**monitor-relative pixels**, not pre-normalised values. Against the captured
+topology — LCI monitor at (1920, 0) sized 1280×960 beside a 1536×960 primary, so
+a desktop spanning x 0..3200 — a touch at the LCI monitor's own origin maps to
+`1920 / 3200 * 65535 = 39321`, not 0. A host must therefore know where its
+virtual display sits inside the desktop to place input correctly.
 
 **Fact:** the arguments are positional — handler `0x440110` takes `field0` at
 entry `[esp+0x4]` and the two coordinate fields at `[esp+0x8]`/`[esp+0xc]`, read
@@ -274,14 +303,12 @@ not guessed — and also not confirmed. Nothing in this repository transmits it.
 `hashi_stream.py`, with `tests/test_hashi_stream.py`. It performs no I/O, opens
 no socket and talks to no device. `hashi_framing.py` and `hashi_startup.py` are
 reused unchanged — the outbound encoder round-trips through the existing
-validated parser. Suite is 78 tests.
+validated parser. Suite is 90 tests.
 
 ## What remains, and what it would cost
 
 Answerable offline from the agent already present:
 
-- The two per-axis coordinate getters (RVA `0x40760`/`0x406e0`, `0x407c0`/`0x40720`),
-  for the exact offset-and-scale arithmetic.
 - `field0` 10's separate path, and the `field0` 16/17 `ProcControlMessage` body
   that reads `field2` as two packed 16-bit halves.
 - The touch-injection path and its `ContactID` handling, plus
