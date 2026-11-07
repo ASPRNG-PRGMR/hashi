@@ -62,7 +62,7 @@ Offsets are relative to the generation-3 direction file, after the usbmux portio
 
 **Fact:** The final 16-byte response being split into recv lengths 4 and 12 demonstrates why API-call boundaries cannot be treated as application-message boundaries. No packet capture was performed; the files reconstruct accepted Winsock byte streams using captured chunk offsets. Recorded concurrent same-direction calls did not overlap in this window. This does not measure physical USB transfer boundaries or packet retransmissions.
 
-**Hypothesis:** Values such as 2048 and 1536 may relate to display dimensions or capabilities. Their semantic role is not proved merely by resembling dimensions. Fedora static analysis should inspect how the check routine consumes these fields before using them in a host implementation.
+**Resolved by FED-START-E001 (2026-11-07):** these are the client dimensions. `CProbeUsbmuxd::DoHandshake` at RVA `0x303f0` requires HELLO ACK field 0 to equal 2, then reads field 1 as the client width and field 2 as the height, aligns each as `((v - 1) & ~3) + 4`, and stores them to shared state `+0x14`/`+0x18`, logging `client resolution (%d, %d) -> (%d, %d)`. The earlier hypothesis is confirmed and the semantic role is now established. Two other observations in this report are also explained there: the little-endian `05 00 00 00` field is written with no `htonl` unlike every sibling field, and the final reply's 4-plus-12 receive split is by design rather than a network artifact. See [startup handshake](fedora-startup-handshake.md).
 
 ## Framing and image validation
 

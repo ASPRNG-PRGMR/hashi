@@ -106,25 +106,43 @@ wired into anything. Tests live in `tests/` and are run with
 `python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode` (21 tests,
 passing). Reuse these rather than rewriting them.
 
+## What FED-START-E001 settled
+
+**Fact:** `CProbeUsbmuxd::DoHandshake` at RVA `0x303f0` is decoded in full and
+implemented in `hashi_startup.py`. Header = type byte + BE24 length, built as
+`(htonl(len << 8) << 8) | type`. Step 1 is a little-endian DWORD 4 byte-order
+probe; only byte 0 of the reply is checked; the result lands in shared `+0x40`.
+HELLO/HELLO ACK/READY/READY ACK require field 0 = 1/2/0xfe/0xff. Client
+dimensions come from HELLO ACK fields 1 and 2, aligned `((v-1) & ~3) + 4` into
+shared `+0x14`/`+0x18`. The `0xfc` record's field 1 is written with **no**
+`htonl`, which is why it appears little-endian. The final reply is read as a
+4-byte header then a looped body, so its 4-plus-12 split is by design.
+
+**Fact:** Validated offline with no device and no Windows — byte-exact outgoing
+startup, zero-remainder incoming parse, all 1,903 image headers re-encoding, and
+the whole 130,375,177-byte application stream accounted for.
+
+**Do not promote these:** the `0xfc` literal 5 is a **Hypothesis** (a nearby gate
+wants an `RtlGetVersion`-derived value `>= 5`, which is suggestive, not proof),
+and the legacy native-order fallback (type 1) is decoded but **never observed**.
+
 ## Next task, in order — there is no pending Windows work
 
-1. **Decode the startup state machine at RVA `0x303f0`.** One 0x792-byte,
-   563-instruction function holds every observed host→iPad send (`0x30476`,
-   `0x30592`, `0x306e7`, `0x30837`) plus reply handling; receive helper is
-   `0x112e8`. The agent *is* the host, so this is host-side protocol logic.
-   Establish per-field semantics, which replies are validated and how, failure
-   and timeout behaviour, and the meaning of the `05 00 00 00` bytes in the
-   fourth send. Static only.
-2. **Build a byte-exact offline harness.** Re-serialise the captured outgoing
-   stream from the host-side model and diff against the capture bytes. This
-   validates an implementation without sending anything to the iPad, and keeps
-   step 1's inferences from drifting into assumption.
-3. `AttachExtendDisplay` callers and the unclassified `ChangeDisplaySettingsExW`
+1. **The steady-state image loop.** Decode receive helper `0x112e8` and the
+   ongoing send path `0x2f6c5`–`0x2f718` that WIN-START-E005 corroborated, to
+   establish how frames are paced and how incoming traffic is handled after
+   startup. Static only; extend `hashi_startup.py`/`hashi_framing.py`.
+2. **The trailing "extra data" block and the capability/`diff_jpeg` parser.** The
+   captured capability body begins with NUL and bypasses the inspected
+   `diff_jpeg` key path, so differential JPEG is *not* established. Decode the
+   parser rather than guessing the format.
+3. **JPEG emission.** All 1,903 frames share one DQT/DHT table set and 4:2:0
+   sampling, already established, so a host can emit the same tables without
+   guessing. Target size is **1280×960**, the user's stated requirement.
+4. `AttachExtendDisplay` callers and the unclassified `ChangeDisplaySettingsExW`
    sites, to bound the FED-MODE-E001 claim by evidence.
-4. The capability/`diff_jpeg` parser, and the constant DQT/DHT tables and 4:2:0
-   sampling a host would emit (already established across all 1,903 frames).
-5. Reconcile new evidence with explicit Facts, Inferences and unknowns. Target
-   size for the host is **1280×960**, the user's stated requirement.
+5. Reconcile new evidence with explicit Facts, Inferences and unknowns. Keep
+   extending the offline byte-exact harness rather than reaching for the device.
 
 ## Constraints
 
