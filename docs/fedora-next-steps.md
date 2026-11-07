@@ -1,5 +1,14 @@
 # HASHI: next session after Fedora static inspection
 
+## Fedora import of the backend transfer — 2026-11-07
+
+**Fact:** The Windows backend transfer was received and verified on Fedora. See
+[Fedora backend import](fedora-backend-import.md) for the archive hash, the
+139-member pre-extraction safety audit, the 138 verified payloads, the verified
+98-file private index, the two documentation-only bundle commits and the
+fast-forward integration to `4193abc`. The private evidence root for this
+transfer is recorded there; it stays out of Git. No push was performed.
+
 ## Windows backend observation complete — 2026-11-07
 
 **Fact (WIN-BACKEND-E001–E004):** On the working Windows installation, the loaded LCI captor vtable was RVA `0x1ac4b4`, and the ordinary JPEG encoder vtable was RVA `0x1ac818`. A single normal cable reconnect with the bounded passive observer captured 2048×1536 client values, a 1600×1200 LCI sizing-helper result, then 1280×960 after monitor refresh and at ordinary JPEG initialization. The post-reconnect LuminonCore current mode and rectangle were 1280×960. Read the new top section of [Fedora startup validation](fedora-startup-validation.md) for timestamps, addresses, hashes, registry defaults, probe cleanup and limitations. The user confirmed the display works. A first broader hook failed at RVA `0x31a26`; its raw output is retained, while the successful narrowed run detached cleanly.
