@@ -77,17 +77,38 @@ tag-6 record header            (hashi_stream.encode_image_record)
 
 **Fact:** every captured record ends with `ff d9`.
 
+## The entropy coder is not needed — libjpeg-turbo matches exactly
+
+**Fact:** libjpeg-turbo, driven through Pillow with `quality=80`,
+`subsampling=2` (4:2:0) and `dpi=(120, 120)`, produces a prelude
+**byte-identical** to the captured one.
+
+**Fact — and this is the decisive part.** The first record in the captured
+stream is a solid **black** 1280×960 screen of 19,827 bytes. A black frame
+generated with those settings is byte-identical to it across the whole frame,
+scan data included: SHA-256
+`317955d8383feb8b7e0e47b753c01b725373c1d35673a61adea31406a01d961d` on both.
+
+So the forward DCT, quantization, Huffman coding and bit packing all agree with
+the vendor's encoder exactly. **No hand-written entropy coder is required.**
+
+**Limitation, stated plainly.** A solid-colour frame exercises DC coding and
+end-of-block but very little AC content. Frames carrying real desktop content
+cannot be compared, because reproducing them needs their exact source pixels —
+an attempt at the white test-pattern sample produced 21,037 bytes against the
+captured 26,568, which reflects missing desktop detail rather than an encoder
+difference. So "the encoders agree in general" is **strong evidence, not proof**.
+
+It also does not need to be proof. Per the interoperability note above, JPEG
+carries its own tables, so byte-equality with the vendor's encoder was never a
+requirement — only a convenient way to check the settings.
+
 ## Remaining
 
-**The entropy coder is the one missing piece of outbound frame generation.** It
-needs the forward DCT, quantization against the tables above, and Huffman coding
-with the Annex K tables — in 4:2:0, so chroma is subsampled 2×2. That is ordinary
-baseline JPEG work with no protocol unknowns left in it, and it is testable
-offline by decoding the result and comparing pixels, exactly as WIN-START-E004
-did for the captured samples.
+Outbound frame generation is **done**: `hashi_jpeg.encode_frame` takes a Pillow
+RGB image and returns a payload, and `hashi_stream.encode_image_record` wraps it.
+What remains for the host is supplying real pixels — the Mutter virtual monitor
+and PipeWire capture — not encoding them.
 
-An alternative worth weighing at implementation time: a standard library
-(`libjpeg-turbo` via Pillow, or PipeWire-side encoding) at quality 80 with
-standard tables would produce a conformant and probably byte-compatible prelude,
-at the cost of less control over the exact bytes. Given the interoperability note
-above, that is a legitimate choice rather than a compromise.
+Unexercised: the differential-JPEG path (gated and never enabled by the device)
+and the `CEncoderVideoSRx264` alternative codec selected by shared `+0x64`.

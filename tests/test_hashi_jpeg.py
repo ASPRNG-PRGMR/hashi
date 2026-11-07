@@ -34,6 +34,14 @@ from hashi_jpeg import (
 )
 
 
+#: SHA-256 of the first record in the captured image stream: a solid black
+#: 1280x960 screen, 19,827 bytes. libjpeg-turbo at the observed settings
+#: reproduces it byte for byte.
+FIRST_CAPTURED_FRAME_SHA256 = (
+    "317955d8383feb8b7e0e47b753c01b725373c1d35673a61adea31406a01d961d"
+)
+
+
 class PreludeReproductionTests(unittest.TestCase):
     def test_constructed_prelude_matches_the_captured_header_hash(self):
         prelude = build_prelude()
@@ -151,3 +159,48 @@ class SegmentParseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EncoderTests(unittest.TestCase):
+    """libjpeg-turbo reproduces the agent's encoder at these settings."""
+
+    def setUp(self):
+        try:
+            import PIL  # noqa: F401
+        except ImportError:
+            self.skipTest("Pillow unavailable")
+
+    def test_settings_are_the_observed_ones(self):
+        from hashi_jpeg import ENCODE_SETTINGS, OBSERVED_DENSITY, OBSERVED_QUALITY
+        self.assertEqual(ENCODE_SETTINGS["quality"], OBSERVED_QUALITY)
+        self.assertEqual(ENCODE_SETTINGS["subsampling"], 2)  # 4:2:0
+        self.assertEqual(ENCODE_SETTINGS["dpi"], (OBSERVED_DENSITY,) * 2)
+
+    def test_encoded_prelude_is_byte_identical_to_the_constructed_one(self):
+        from hashi_jpeg import build_prelude, solid_frame
+        frame = solid_frame()
+        self.assertEqual(frame[:OBSERVED_PRELUDE_LEN], build_prelude())
+
+    def test_black_frame_reproduces_the_first_captured_record_exactly(self):
+        # The decisive assertion: the first record in the captured stream was a
+        # solid black 1280x960 screen, 19,827 bytes, SHA-256 317955d8...
+        from hashi_jpeg import solid_frame
+        frame = solid_frame(colour=(0, 0, 0))
+        self.assertEqual(len(frame), 19827)
+        self.assertEqual(hashlib.sha256(frame).hexdigest(), FIRST_CAPTURED_FRAME_SHA256)
+        self.assertTrue(frame.endswith(b"\xff\xd9"))
+
+    def test_frames_round_trip_through_the_record_encoder(self):
+        from hashi_framing import jpeg_baseline_size, parse_records
+        from hashi_jpeg import solid_frame
+        from hashi_stream import encode_image_record
+        frame = solid_frame(colour=(32, 32, 32))
+        records = parse_records(encode_image_record(frame))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].tag, 6)
+        self.assertEqual(jpeg_baseline_size(records[0].payload), (1280, 960))
+
+    def test_rejects_a_non_image(self):
+        from hashi_jpeg import encode_frame
+        with self.assertRaises(JpegError):
+            encode_frame(object())

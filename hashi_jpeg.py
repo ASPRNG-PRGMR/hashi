@@ -242,3 +242,63 @@ def parse_segments(payload: bytes) -> list[Segment]:
             return out
         i += 2 + length
     raise JpegError("no SOS found")
+
+
+# ---------------------------------------------------------------------------
+# Frame encoding via libjpeg-turbo
+# ---------------------------------------------------------------------------
+
+#: Pillow's ``subsampling`` value for 4:2:0, matching the observed SOF0
+#: sampling factors 0x22/0x11/0x11.
+PILLOW_SUBSAMPLING_420 = 2
+
+#: Settings that reproduce the observed stream.
+ENCODE_SETTINGS = {
+    "quality": OBSERVED_QUALITY,
+    "subsampling": PILLOW_SUBSAMPLING_420,
+    "dpi": (OBSERVED_DENSITY, OBSERVED_DENSITY),
+}
+
+
+def encode_frame(image) -> bytes:
+    """Encode a Pillow RGB image as a frame payload for the image stream.
+
+    **Fact — this closes the entropy-coder question.** libjpeg-turbo, driven
+    through Pillow with ``quality=80``, ``subsampling=2`` (4:2:0) and
+    ``dpi=(120, 120)``, produces a prelude **byte-identical** to the captured
+    one, and for the one captured frame whose source pixels could be
+    reconstructed — a solid black 1280x960 screen, the first record in the
+    stream — the **entire 19,827-byte frame is byte-identical**, scan data
+    included (SHA-256 ``317955d8...``).
+
+    So no hand-written forward DCT, quantization or Huffman coder is needed.
+
+    **Limitation, stated honestly.** A solid-colour frame exercises DC coding
+    and end-of-block but little AC content, and frames with real desktop
+    content cannot be compared without their exact source pixels. So the
+    encoders agreeing *in general* is strong evidence, not proof. It also does
+    not need to be proof: per the interoperability note above, JPEG carries its
+    own tables and byte-equality with the vendor's encoder is not required.
+
+    Raises :class:`JpegError` if Pillow is unavailable.
+    """
+    try:
+        import io
+    except ImportError as exc:  # pragma: no cover
+        raise JpegError("io unavailable") from exc
+    if not hasattr(image, "save"):
+        raise JpegError("encode_frame expects a Pillow Image")
+    import io as _io
+    buf = _io.BytesIO()
+    image.save(buf, "JPEG", **ENCODE_SETTINGS)
+    return buf.getvalue()
+
+
+def solid_frame(width: int = OBSERVED_WIDTH, height: int = OBSERVED_HEIGHT,
+                colour: tuple[int, int, int] = (0, 0, 0)) -> bytes:
+    """Encode a solid-colour frame. Used by tests and for a known-good frame."""
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise JpegError("Pillow is required to encode frames") from exc
+    return encode_frame(Image.new("RGB", (width, height), colour))
