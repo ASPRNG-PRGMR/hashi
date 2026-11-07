@@ -160,10 +160,90 @@ instructions, so it was decoded from raw bytes):
 
 Eleven distinct targets in total.
 
-**Inference:** six equally spaced 7-byte stubs each setting one constant before a
-common path is the usual shape of button down/up pairs. **Which value is which
-button, and whether coordinates are absolute or normalised, is not established.**
-Do not assign them.
+**Resolved below:** those six stubs are the mouse button down/up pairs, and the
+coordinate question is settled. See the next section.
+
+## The input event kinds are now mapped
+
+**Fact — the button mapping is exact, not inferred.** Each of the six
+consecutive 7-byte stubs at RVA `0x40254`–`0x40277` sets one constant into EBP,
+which RVA `0x402bd` stores into `mi.dwFlags`. The constants are precisely the
+documented Win32 `MOUSEEVENTF_*` button values, in down/up order:
+
+| `field0` | EBP constant | Win32 name |
+| --- | --- | --- |
+| 5 | `0x02` | `MOUSEEVENTF_LEFTDOWN` |
+| 6 | `0x04` | `MOUSEEVENTF_LEFTUP` |
+| 8 | `0x08` | `MOUSEEVENTF_RIGHTDOWN` |
+| 9 | `0x10` | `MOUSEEVENTF_RIGHTUP` |
+| 14 | `0x20` | `MOUSEEVENTF_MIDDLEDOWN` |
+| 15 | `0x40` | `MOUSEEVENTF_MIDDLEUP` |
+
+Six distinct documented constants landing in `dwFlags` in the correct order is
+not a coincidence, which is why this is recorded as Fact rather than Hypothesis.
+
+**Fact:** `field0` 4 and 7 jump straight to the shared mouse path at RVA
+`0x4027c` without passing a stub, so EBP keeps the `xor ebp,ebp` zero from RVA
+`0x4011f` and `dwFlags` is 0. **Inference:** these are movement-only events.
+
+**Fact:** the zero-coordinate path at RVA `0x40298`–`0x402c5` calls
+`SendInput(1, &INPUT, 28)` with `type = INPUT_MOUSE`, `dx = dy = 0`,
+`mouseData = 0`, `time = 0`, `dwExtraInfo = 0` and only `dwFlags` set — a pure
+button event with no position.
+
+**Fact — coordinates are absolute over the virtual desktop, normalised to
+0..65535.** The positioned path at RVA `0x40310`–`0x40375` sets
+`dwFlags = 0xC001`, i.e.
+`MOUSEEVENTF_MOVE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_ABSOLUTE`, and for each
+axis sums two object-derived doubles and multiplies by the constant at VA
+`0x5ad930`, which is exactly **65535.0**. That settles the earlier open question
+of absolute versus normalised: it is Win32 absolute, which *is* the 0..65535
+normalisation, taken across the whole virtual desktop rather than one monitor.
+
+**Limitation:** the two per-axis getters (RVA `0x40760`/`0x406e0` for x,
+`0x407c0`/`0x40720` for y) were **not** decoded, so the exact offset-and-scale
+arithmetic is unknown. `hashi_stream.normalise_absolute` implements the plain
+fraction-of-span form a host needs and says in its docstring that it is not the
+agent's exact arithmetic.
+
+**Fact:** the arguments are positional — handler `0x440110` takes `field0` at
+entry `[esp+0x4]` and the two coordinate fields at `[esp+0x8]`/`[esp+0xc]`, read
+later as `[esp+0x48]`/`[esp+0x4c]` after the `sub esp,0x30` and four pushes. So
+TLV `field1` is x and `field2` is y, confirming the `x/w` and `y/h` log naming.
+
+## Input is three subsystems, not one
+
+**Fact**, from the agent's own symbol and log strings:
+
+| String | Address | Meaning |
+| --- | --- | --- |
+| `CInput::HandleEvent` | `0x5acdd0` | |
+| `CInput::ProcControlMessage` | `0x5acde4` | the `field0` 16/17 path |
+| `CInput::HandleHidMessage` | `0x5ace30` | a separate HID path |
+| `InitializeTouchInjection` | `0x5acd0c` | resolved by name |
+| `InjectTouchInput` | `0x5acd28` | resolved by name |
+| `[%s] init touch failed: %d` | `0x5acd44` | |
+| `[%s] i= %d, m_InjectTouchInput id = %d, flag = 0x%08x` | `0x5acd60` | |
+| `[%s] m_InjectTouchInput error = 0x%08x` | `0x5acd98` | |
+| `[%s] mouse position (%d,%d)` | `0x5ace00` | |
+| `[%s] ContactID = %d` | `0x5ace1c` | |
+
+So mouse and keyboard go through `SendInput`, while **touch is injected through
+the separate Win32 touch API** (`InitializeTouchInjection` / `InjectTouchInput`)
+with a per-contact `ContactID`, i.e. genuine multi-touch rather than mouse
+emulation. There is also an HID message path.
+
+**Consequence for HASHI.** A Linux host receives these records and must inject
+them locally. The natural mapping is `uinput`: a relative or absolute pointer
+device plus a keyboard device, and for touch a multi-touch slot device using
+`ABS_MT_SLOT`/`ABS_MT_TRACKING_ID` to carry the `ContactID`. None of that is
+implemented here, and none of it should be until the records are actually
+observed.
+
+**Fact, noted in passing:** `[%s] PointerPosition Changed: (%d, %d)
+Visible(%u) => (%d, %d) Visible(%u)` at VA `0x5ac0f8` and
+`[%s] PointerShape Changed` at `0x5ac144` are the IddCx cursor-update path, i.e.
+host→device cursor state. Not inspected here.
 
 ## Outbound video reconfiguration — `CConnectBase::SendReconfigVideo`
 
@@ -194,14 +274,18 @@ not guessed — and also not confirmed. Nothing in this repository transmits it.
 `hashi_stream.py`, with `tests/test_hashi_stream.py`. It performs no I/O, opens
 no socket and talks to no device. `hashi_framing.py` and `hashi_startup.py` are
 reused unchanged — the outbound encoder round-trips through the existing
-validated parser. Suite is 69 tests.
+validated parser. Suite is 78 tests.
 
 ## What remains, and what it would cost
 
 Answerable offline from the agent already present:
 
-- The individual input paths behind the 17-entry table, to map `field0` values to
-  concrete event kinds and settle whether coordinates are absolute or normalised.
+- The two per-axis coordinate getters (RVA `0x40760`/`0x406e0`, `0x407c0`/`0x40720`),
+  for the exact offset-and-scale arithmetic.
+- `field0` 10's separate path, and the `field0` 16/17 `ProcControlMessage` body
+  that reads `field2` as two packed 16-bit halves.
+- The touch-injection path and its `ContactID` handling, plus
+  `CInput::HandleHidMessage`.
 - The `0x70` subtype branch, and `CConnectBase::HandleEvent`.
 - The trailing "extra data" block from the handshake, and the capability /
   `diff_jpeg` parser. The captured capability body begins with NUL and bypasses

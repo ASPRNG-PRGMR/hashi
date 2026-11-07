@@ -299,3 +299,118 @@ def encode_reconfig_video(
     return encode_control(
         MSG_VIDEO_CONFIG, first, second, network_order=network_order
     )
+
+
+# ---------------------------------------------------------------------------
+# Input event kinds — CInput, handler 0x440110  (STATIC ONLY, NEVER OBSERVED)
+# ---------------------------------------------------------------------------
+
+# Documented Win32 MOUSEEVENTF_* values, restated here so the mapping below can
+# be checked against the constants the agent actually writes into mi.dwFlags.
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_MIDDLEDOWN = 0x0020
+MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_VIRTUALDESK = 0x4000
+MOUSEEVENTF_ABSOLUTE = 0x8000
+
+#: Flags the agent writes for a positioned move: MOVE | VIRTUALDESK | ABSOLUTE
+#: (``mov DWORD PTR [esp+0x38],0xc001`` at RVA 0x40313).
+MOUSE_MOVE_FLAGS = MOUSEEVENTF_MOVE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_ABSOLUTE
+
+#: Win32 requires ABSOLUTE coordinates normalised to 0..65535. The agent
+#: multiplies by the double constant at VA 0x5ad930, which is exactly 65535.0
+#: (RVA 0x4032f, 0x40355).
+ABSOLUTE_COORD_MAX = 65535
+
+#: ``field0`` -> the MOUSEEVENTF_* value written into ``mi.dwFlags``.
+#: **Fact:** each of the six 7-byte stubs at RVA 0x40254-0x40277 sets exactly one
+#: of these constants into EBP, which RVA 0x402bd stores to ``mi.dwFlags``. The
+#: values match the documented Win32 button constants exactly, in down/up order.
+MOUSE_BUTTON_FLAGS = {
+    5: MOUSEEVENTF_LEFTDOWN,
+    6: MOUSEEVENTF_LEFTUP,
+    8: MOUSEEVENTF_RIGHTDOWN,
+    9: MOUSEEVENTF_RIGHTUP,
+    14: MOUSEEVENTF_MIDDLEDOWN,
+    15: MOUSEEVENTF_MIDDLEUP,
+}
+
+#: ``field0`` values that enter the same mouse path without a button stub, so
+#: EBP keeps the ``xor ebp,ebp`` zero from RVA 0x4011f.
+#: **Inference:** movement-only events.
+MOUSE_MOVE_ONLY = (4, 7)
+
+#: ``field0`` values routed to the keyboard path at RVA 0x40132, which fills a
+#: KEYBDINPUT ``wVk``/``wScan`` pair before SendInput.
+KEYBOARD_FIELD0 = (1, 2)
+
+#: ``field0`` values routed to the CInput::ProcControlMessage path at RVA
+#: 0x40386, which reads ``field2`` as two packed 16-bit halves.
+CONTROL_MESSAGE_FIELD0 = (16, 17)
+
+#: Win32 touch-injection entry points the agent resolves by name. Touch is not
+#: delivered through SendInput.
+TOUCH_INJECTION_SYMBOLS = ("InitializeTouchInjection", "InjectTouchInput")
+
+
+def mouse_flags_for(field0: int) -> int | None:
+    """``mi.dwFlags`` the agent would use for a zero-coordinate event.
+
+    **Fact** for the six button values, whose constants match Win32 exactly.
+    Returns 0 for the movement-only values, whose stub-free path leaves EBP at
+    zero, and None for a ``field0`` that is not on the mouse path at all.
+
+    **Static only — never observed on the wire.**
+    """
+    if field0 in MOUSE_BUTTON_FLAGS:
+        return MOUSE_BUTTON_FLAGS[field0]
+    if field0 in MOUSE_MOVE_ONLY:
+        return 0
+    return None
+
+
+def normalise_absolute(value: int, span: int) -> int:
+    """Normalise a coordinate to the Win32 absolute 0..65535 range.
+
+    **Partial.** RVA 0x40310-0x40360 computes, per axis, the sum of two
+    object-derived doubles and multiplies by 65535.0 before truncating to an
+    int, then sets ``mi.dwFlags`` to ``MOVE | VIRTUALDESK | ABSOLUTE``. That the
+    target range is 0..65535 over the **virtual desktop** is Fact — the flag and
+    the constant establish it. The exact two getters (RVA 0x40760/0x406e0 for x
+    and 0x407c0/0x40720 for y) were **not** decoded, so the offset-and-scale
+    detail is unknown; this helper implements the plain fraction-of-span form a
+    host would need and must not be presented as the agent's exact arithmetic.
+    """
+    if span <= 0:
+        raise StreamError(f"span must be positive, got {span}")
+    if not 0 <= value <= span:
+        raise StreamError(f"value {value} outside span 0..{span}")
+    return int(value / span * ABSOLUTE_COORD_MAX)
+
+
+def input_kind(field0: int) -> str:
+    """Coarse classification of a ``field0``, by which dispatch path it takes.
+
+    **Fact** for the routing; the labels are the agent's own, from its symbol
+    and log strings. ``"ignored"`` means in range but sent to the epilogue.
+
+    **Static only — never observed on the wire.** Returns ``"out-of-range"``
+    above 17, which includes the video subtypes 0x70 and 0x71 handled elsewhere.
+    """
+    if field0 in KEYBOARD_FIELD0:
+        return "keyboard"
+    if field0 in MOUSE_BUTTON_FLAGS:
+        return "mouse-button"
+    if field0 in MOUSE_MOVE_ONLY:
+        return "mouse-move"
+    if field0 in INPUT_IGNORED:
+        return "ignored"
+    if field0 in CONTROL_MESSAGE_FIELD0:
+        return "control-message"
+    if 1 <= field0 <= INPUT_DISPATCH_MAX:
+        return "other"
+    return "out-of-range"
