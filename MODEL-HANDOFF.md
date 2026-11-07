@@ -106,7 +106,7 @@ FED-MODE-E001 dimension rules, with the reconstructed
 `FindBestResolution` scorer clearly marked **Inference** and deliberately not
 wired into anything. Tests live in `tests/` and are run with
 `python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode
-tests.test_hashi_startup tests.test_hashi_stream` (94 tests,
+tests.test_hashi_startup tests.test_hashi_stream` (135 tests,
 passing). Reuse these rather than rewriting them.
 
 ## What FED-START-E001 settled
@@ -180,12 +180,45 @@ five (2, 4, 26, 201, 202); TLV `0x70` enqueues id `0xc9` = 201.
 **Still unobserved:** every inbound record. The differential-JPEG path is gated
 but never enabled, so what it transmits is unknown.
 
+## FED-LIVE-E001: the host now works against the real iPad
+
+**Fact:** on 2026-11-08 the user granted explicit authority for device contact
+and the probe succeeded. The decoded handshake completed first time; 362 replayed
+1280x960 frames (9.6 MB, 30 fps) were **displayed on the iPad**, user-confirmed;
+and a 45-second window captured **1,449 inbound input records**.
+
+**Fact:** the handshake's client dimensions (2048x1536) and 12-byte extra-data
+block (`000000fd` + zeros) are byte-identical to the Windows capture, confirming
+the `diff_jpeg` gate's real-world outcome: ordinary JPEG.
+
+**Fact:** every inbound record was TLV type 7, 16 bytes, `07 00 00 0c` header,
+big-endian payload, zero truncation, coordinates inside the 1280x960 display's
+pixel space. `field0` **5 = pointer down, 6 = up, 10 = motion**; downs and ups
+strictly alternate, a tap is `5 -> 6`, a drag is `5 -> 10... -> 6`. Static
+analysis had predicted 5 and 6 from the `MOUSEEVENTF_*` constants alone; 10 was
+the one value it could not classify.
+
+**Frames were replayed, not generated.** Transport, handshake, framing and frame
+format are validated. Frame *generation* is not.
+
+**Still unexercised:** multi-touch and the `ContactID`/`InjectTouchInput` path,
+keyboard (`field0` 1/2), `field0` 16/17, reconfiguration, the TLV `0x70` subtype,
+and differential JPEG.
+
 ## Next task, in order — there is no pending Windows work
 
-1. **The indirect vtable targets** behind the five `HandleEvent` cases. Four end
-   in `call edx` and the `0x70`-reachable case only forwards and re-tags, so the
-   `0x70` subtype's purpose hinges on resolving the vtable owner — not on more of
-   the same function.
+1. **The JPEG entropy coder** — forward DCT, quantization against the Annex K
+   tables at quality 80, and Huffman coding in 4:2:0. The only missing piece of
+   outbound frame generation, and it has no protocol unknowns left in it.
+2. **The Mutter virtual monitor and PipeWire capture**, so frames come from a
+   real extended display instead of a replay. Verify the `RecordVirtual` and
+   `Notify*` parameter contracts against Mutter 51 first; only the method names
+   are confirmed.
+3. **Input injection** mapping `field0` 5/6/10 onto `NotifyPointerButton` and
+   `NotifyPointerMotionAbsolute` — now with observed event values to test
+   against rather than inferred ones.
+4. **The indirect vtable targets** behind the five `HandleEvent` cases, if the
+   `0x70` subtype ever matters.
 2. **`field0` 10's path**, the 16/17 `ProcControlMessage` body that reads
    `field2` as two packed 16-bit halves, the touch-injection path and its
    `ContactID` handling, and `CInput::HandleHidMessage`.
