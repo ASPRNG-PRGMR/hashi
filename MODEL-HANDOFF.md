@@ -103,7 +103,7 @@ rather than writing into an existing one.
 `hashi_mode.py` holds the FED-MODE-E001 dimension rules, with the reconstructed
 `FindBestResolution` scorer clearly marked **Inference** and deliberately not
 wired into anything. Tests live in `tests/` and are run with
-`python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode` (21 tests,
+`python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode` (94 tests,
 passing). Reuse these rather than rewriting them.
 
 ## What FED-START-E001 settled
@@ -147,17 +147,49 @@ usbmux, 52 startup, **zero** steady state. No inbound record, no reconfiguration
 The input dispatch and reconfig encoder have **no** byte-exact validation. Do not
 promote them, and do not assign meanings to `field0` values or coordinates.
 
+## What the 2026-11-08 offline continuation added
+
+**Fact:** input event kinds are mapped. The six 7-byte stubs set exactly the
+Win32 `MOUSEEVENTF_*` button constants (5/6 left down/up, 8/9 right, 14/15
+middle); 4 and 7 are movement-only; 1 and 2 are keyboard; 3, 11, 12, 13 are
+accepted and ignored; 16 and 17 go to `CInput::ProcControlMessage`.
+
+**Fact:** coordinates are Win32 absolute over the **virtual desktop**, flags
+`0xC001`, normalised by the constant 65535.0. Full transform:
+`((value + monitor_origin - desktop_origin) / desktop_span) * 65535`, with the
+monitor origin from record `+0x00`/`+0x04` (RVA 0xcd00/0xcd70). **Incoming
+coordinates are monitor-relative pixels**, so a host must know its display's
+placement in the desktop.
+
+**Fact:** input is three subsystems — mouse and keyboard via `SendInput`,
+multi-touch via `InitializeTouchInjection`/`InjectTouchInput` with a
+`ContactID`, and `CInput::HandleHidMessage`.
+
+**Fact:** the handshake's trailing extra-data block is a **JSON** document. The
+`diff_jpeg` gate is: key present, member is a boolean, value true → shared
+`+0x68` = 1. The captured body (`000000fd` + zeros) is not valid JSON, so the
+parse fails and ordinary JPEG is selected — **this explains the observed
+`CEncoderVideoJpeg`**, closing a question open since the first capture.
+
+**Fact:** `CConnectBase::HandleEvent` accepts ids 2..202 and handles exactly
+five (2, 4, 26, 201, 202); TLV `0x70` enqueues id `0xc9` = 201.
+
+**Still unobserved:** every inbound record. The differential-JPEG path is gated
+but never enabled, so what it transmits is unknown.
+
 ## Next task, in order — there is no pending Windows work
 
-1. **The individual input paths** behind the 17-entry table, to map `field0`
-   values to concrete event kinds and settle whether coordinates are absolute or
-   normalised. Also the `0x70` subtype branch and `CConnectBase::HandleEvent`.
-2. **The trailing "extra data" block and the capability/`diff_jpeg` parser.** The
-   captured capability body begins with NUL and bypasses the inspected
-   `diff_jpeg` key path, so differential JPEG is *not* established.
-3. **JPEG emission.** All 1,903 frames share one DQT/DHT table set and 4:2:0
-   sampling, already established, so a host can emit the same tables without
-   guessing. Target size is **1280×960**, the user's stated requirement.
+1. **The indirect vtable targets** behind the five `HandleEvent` cases. Four end
+   in `call edx` and the `0x70`-reachable case only forwards and re-tags, so the
+   `0x70` subtype's purpose hinges on resolving the vtable owner — not on more of
+   the same function.
+2. **`field0` 10's path**, the 16/17 `ProcControlMessage` body that reads
+   `field2` as two packed 16-bit halves, the touch-injection path and its
+   `ContactID` handling, and `CInput::HandleHidMessage`.
+3. **JPEG emission**, and the `CEncoderVideoSRx264` alternative codec
+   (`SRx264Wrapper.dll`, selected by shared `+0x64`, entirely unexercised). All
+   1,903 frames share one DQT/DHT table set and 4:2:0 sampling, so a host can
+   emit the same tables without guessing. Target size is **1280×960**.
 4. `AttachExtendDisplay` callers and the unclassified `ChangeDisplaySettingsExW`
    sites, to bound the FED-MODE-E001 claim by evidence.
 5. Reconcile new evidence with explicit Facts, Inferences and unknowns. Keep
