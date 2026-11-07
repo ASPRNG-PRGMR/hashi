@@ -100,10 +100,13 @@ rather than writing into an existing one.
 ## Repository code
 
 `hashi_framing.py` is the validated record-boundary and JPEG-header parser;
-`hashi_mode.py` holds the FED-MODE-E001 dimension rules, with the reconstructed
+`hashi_startup.py` the handshake codec and capability gate; `hashi_stream.py` the
+steady-state codec, input mapping and event dispatch; `hashi_mode.py` holds the
+FED-MODE-E001 dimension rules, with the reconstructed
 `FindBestResolution` scorer clearly marked **Inference** and deliberately not
 wired into anything. Tests live in `tests/` and are run with
-`python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode` (94 tests,
+`python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode
+tests.test_hashi_startup tests.test_hashi_stream` (94 tests,
 passing). Reuse these rather than rewriting them.
 
 ## What FED-START-E001 settled
