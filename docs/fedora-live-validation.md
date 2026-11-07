@@ -45,7 +45,15 @@ pass, and ordinary JPEG is genuinely the operative path.
 white → black → white pattern of 4 seconds each, using the user's own previously
 captured 1280×960 frames. Every byte was accepted; the socket closed cleanly.
 
-**Fact:** the user confirmed the pattern was visible on the iPad screen.
+**Fact:** the user confirmed the pattern was visible on the iPad screen, and
+further confirmed that what they saw was recognisably the **Windows desktop UI**
+from the original capture.
+
+That second detail is stronger evidence than "an image appeared". The replayed
+frames are JPEGs of a Windows extended display, so recognising the Windows UI
+means the frames decoded faithfully and the pixel content arrived intact — not
+merely that the device accepted the bytes. It also makes the replay unmistakable
+as a replay, which is exactly why it cannot stand in for frame generation.
 
 So the whole outbound stack works end to end from Linux — usbmux transport,
 startup handshake, record framing and JPEG frame format — all of it derived from

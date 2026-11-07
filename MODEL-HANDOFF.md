@@ -198,8 +198,11 @@ strictly alternate, a tap is `5 -> 6`, a drag is `5 -> 10... -> 6`. Static
 analysis had predicted 5 and 6 from the `MOUSEEVENTF_*` constants alone; 10 was
 the one value it could not classify.
 
-**Frames were replayed, not generated.** Transport, handshake, framing and frame
-format are validated. Frame *generation* is not.
+**Frames were replayed, not generated.** The user recognised the **Windows
+desktop UI** from the original capture on the iPad screen, which confirms the
+frames decoded faithfully rather than merely being accepted — and makes the
+replay unmistakable as a replay. Transport, handshake, framing and frame format
+are validated. Frame *generation* is not.
 
 **Still unexercised:** multi-touch and the `ContactID`/`InjectTouchInput` path,
 keyboard (`field0` 1/2), `field0` 16/17, reconfiguration, the TLV `0x70` subtype,
