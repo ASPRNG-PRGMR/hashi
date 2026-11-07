@@ -287,9 +287,11 @@ Answerable offline from the agent already present:
 - The touch-injection path and its `ContactID` handling, plus
   `CInput::HandleHidMessage`.
 - The `0x70` subtype branch, and `CConnectBase::HandleEvent`.
-- The trailing "extra data" block from the handshake, and the capability /
-  `diff_jpeg` parser. The captured capability body begins with NUL and bypasses
-  the inspected `diff_jpeg` key path, so differential JPEG remains unestablished.
+- The differential-JPEG *payload* format. Its negotiation gate is now
+  established (see the handshake report), but no session has enabled it, so what
+  the path transmits is still unknown.
+- The `CEncoderVideoSRx264` alternative codec, which loads
+  `SRx264Wrapper.dll` and is selected by shared `+0x64`. Entirely unexercised.
 
 **Requires the iPad connected.** Confirming the inbound channel at all — which
 `field0` values actually arrive, what coordinates they carry, and whether

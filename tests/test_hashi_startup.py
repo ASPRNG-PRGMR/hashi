@@ -194,3 +194,61 @@ class ExtraDataTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CapabilityDocumentTests(unittest.TestCase):
+    """The trailing extra-data block, decoded from RVA 0x309a0-0x30ac5."""
+
+    # The captured extra-data body: the 12 bytes the device sent after the
+    # 0xfc request, read as a 4-byte header plus this body.
+    CAPTURED_BODY = bytes.fromhex("000000fd" "00000000" "00000000")
+
+    def test_captured_body_does_not_enable_diff_jpeg(self):
+        from hashi_startup import diff_jpeg_enabled
+        # This is the result that explains the observed encoder choice: the
+        # body begins with NUL and is not a JSON document, so the parse fails
+        # and shared +0x68 stays 0, selecting ordinary JPEG. That matches the
+        # runtime CEncoderVideoJpeg vtable RVA 0x1ac818 in WIN-BACKEND-E003.
+        self.assertFalse(diff_jpeg_enabled(self.CAPTURED_BODY))
+
+    def test_captured_body_is_not_valid_json(self):
+        from hashi_startup import StartupError, parse_capability_document
+        with self.assertRaises(StartupError) as cm:
+            parse_capability_document(self.CAPTURED_BODY)
+        self.assertIn("parse extra data failed", str(cm.exception))
+
+    def test_only_a_real_boolean_true_enables_it(self):
+        from hashi_startup import diff_jpeg_enabled
+        self.assertTrue(diff_jpeg_enabled(b'{"diff_jpeg": true}'))
+        self.assertFalse(diff_jpeg_enabled(b'{"diff_jpeg": false}'))
+
+    def test_non_boolean_values_do_not_qualify(self):
+        # Step 2 of the gate is an explicit is-boolean test, so truthy
+        # non-booleans must not pass.
+        from hashi_startup import diff_jpeg_enabled
+        for body in (b'{"diff_jpeg": 1}', b'{"diff_jpeg": "true"}',
+                     b'{"diff_jpeg": [true]}', b'{"diff_jpeg": null}'):
+            self.assertFalse(diff_jpeg_enabled(body), body)
+
+    def test_missing_key_and_malformed_documents_are_all_just_disabled(self):
+        from hashi_startup import diff_jpeg_enabled
+        for body in (b'{}', b'{"other": true}', b'[]', b'[{"diff_jpeg": true}]',
+                     b'garbage', b'', b'\x00\x00\x00\x00', b'"diff_jpeg"', b'7'):
+            self.assertFalse(diff_jpeg_enabled(body), body)
+
+    def test_scalar_documents_are_rejected_like_jsoncpp_does(self):
+        from hashi_startup import StartupError, parse_capability_document
+        for body in (b'7', b'"x"', b'true', b'null'):
+            with self.assertRaises(StartupError) as cm:
+                parse_capability_document(body)
+            self.assertIn("array or an object", str(cm.exception))
+
+    def test_valid_documents_parse(self):
+        from hashi_startup import parse_capability_document
+        self.assertEqual(parse_capability_document(b'{"a": 1}'), {"a": 1})
+        self.assertEqual(parse_capability_document(b'[1, 2]'), [1, 2])
+
+    def test_constants(self):
+        from hashi_startup import CAPABILITY_DIFF_JPEG, SHARED_OFFSET_DIFF_JPEG
+        self.assertEqual(CAPABILITY_DIFF_JPEG, "diff_jpeg")
+        self.assertEqual(SHARED_OFFSET_DIFF_JPEG, 0x68)

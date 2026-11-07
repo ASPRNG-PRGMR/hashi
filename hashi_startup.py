@@ -265,3 +265,76 @@ def extra_data_length(header: bytes) -> int:
     if length == 0:
         raise StartupError("recv extra data length failed: announced length is zero")
     return length
+
+
+# ---------------------------------------------------------------------------
+# The trailing "extra data" block is a JSON capability document
+# ---------------------------------------------------------------------------
+
+#: The only capability key the agent inspects (string at VA 0x5ab0b4).
+CAPABILITY_DIFF_JPEG = "diff_jpeg"
+
+#: Shared-state offset the result is written to. Per the established field
+#: table, +0x68 chooses differential JPEG when +0x64 is zero.
+SHARED_OFFSET_DIFF_JPEG = 0x68
+
+
+def parse_capability_document(body: bytes) -> dict:
+    """Parse the trailing "extra data" block as the agent does.
+
+    **Fact.** RVA 0x309a0-0x30ac5, inside ``CProbeUsbmuxd::DoHandshake``, feeds
+    the received block to a JSON parser and logs
+    ``parse extra data failed, %s`` on failure. The parser is JsonCpp or a close
+    relative — its error strings are present verbatim in ``.rdata``, including
+    "A valid JSON document must be either an array or an object value." and
+    "Syntax error: value, object or array expected."
+
+    Returns the decoded object on success. Raises :class:`StartupError` when the
+    block is not a valid JSON document, which is what the agent treats as
+    failure.
+    """
+    import json
+
+    if not body:
+        raise StartupError("parse extra data failed: empty block")
+    try:
+        value = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise StartupError(f"parse extra data failed, {exc}") from exc
+    if not isinstance(value, (dict, list)):
+        raise StartupError(
+            "parse extra data failed, A valid JSON document must be either "
+            "an array or an object value."
+        )
+    return value
+
+
+def diff_jpeg_enabled(body: bytes) -> bool:
+    """Whether the agent would set shared ``+0x68`` from this extra-data block.
+
+    **Fact.** The gate is a three-step chain at RVA 0x30a31-0x30a75, each step
+    falling through to ``+0x68 = 0`` on failure:
+
+    1. the document contains the key ``diff_jpeg`` (RVA 0x30a40);
+    2. that member is a boolean (RVA 0x30a57);
+    3. its value is true (RVA 0x30a6e).
+
+    Only then does RVA 0x30a83 store 1 to ``+0x68`` and log
+    ``enable jpeg diff stream``. A malformed document, a missing key, a
+    non-boolean value or ``false`` all leave differential JPEG off.
+
+    This function returns False for every failure mode rather than raising,
+    matching the agent's behaviour of treating them all as "not enabled".
+    """
+    try:
+        document = parse_capability_document(body)
+    except StartupError:
+        return False
+    if not isinstance(document, dict):
+        return False
+    value = document.get(CAPABILITY_DIFF_JPEG)
+    # Step 2 is an explicit is-boolean test, so 1 / "true" / non-bool truthy
+    # values do not qualify.
+    if not isinstance(value, bool):
+        return False
+    return value

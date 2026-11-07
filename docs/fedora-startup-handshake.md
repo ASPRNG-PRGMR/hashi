@@ -124,6 +124,47 @@ remains true, but the split is now known to be **by design** — the agent itsel
 issues a header read and then a body read for this message — not a network
 artifact.
 
+## The trailing "extra data" block is a JSON capability document
+
+**Fact:** RVA `0x309a0`–`0x30ac5`, still inside `CProbeUsbmuxd::DoHandshake`,
+feeds the received block to a **JSON** parser and logs
+`parse extra data failed, %s` (VA `0x5ab090`) on failure. The parser is JsonCpp
+or a close relative: its error strings sit verbatim in `.rdata`, including
+*"A valid JSON document must be either an array or an object value."*,
+*"Syntax error: value, object or array expected."* and
+*"Missing ':' after object member name"*.
+
+**Fact — the differential-JPEG gate, at last.** The agent inspects exactly one
+key, `diff_jpeg` (VA `0x5ab0b4`), through a three-step chain, each step falling
+straight through to "disabled":
+
+1. the document **contains** the key (RVA `0x30a40`);
+2. that member **is a boolean** (RVA `0x30a57`);
+3. its value **is true** (RVA `0x30a6e`).
+
+Only then does RVA `0x30a83` store **1** into shared `+0x68` and log
+`enable jpeg diff stream` (VA `0x5ab0c0`). Otherwise RVA `0x30aa8` stores 0. Per
+the established field table, `+0x68` selects differential JPEG when `+0x64` is
+zero — so this is the whole negotiation.
+
+**This explains the observed encoder choice.** The captured extra-data body is
+the 12 bytes `00 00 00 fd 00 00 00 00 00 00 00 00`, read as a 4-byte header plus
+body. It begins with NUL and is not a valid JSON document, so the parse fails,
+`+0x68` stays 0, and **ordinary JPEG is selected** — exactly the runtime
+`CEncoderVideoJpeg` at vtable RVA `0x1ac818` that WIN-BACKEND-E003 observed. The
+long-standing question of why ordinary rather than differential JPEG ran is
+answered: the device never advertised the capability in a form the agent accepts.
+
+**Note on an earlier wording.** WIN-START-E005 recorded that the captured
+capability body "bypasses the inspected `diff_jpeg` key path". That is now
+precise: the body does not reach the key test at all, because the JSON parse
+fails first. The conclusion was right; the mechanism is now established.
+
+**Limitation:** a successful parse with `diff_jpeg: true` has never been
+observed, so the differential-JPEG *path itself* remains unexercised. Knowing how
+it is enabled is not the same as knowing what it then sends. `hashi_startup`
+implements the gate, not the codec.
+
 ## Implementation
 
 `hashi_startup.py` implements the above and is validated by
@@ -138,7 +179,9 @@ unchanged for the image-record portion.
 - The legacy native-order fallback is decoded but unobserved.
 - The meaning of the `0xfc` record's literal 5 is **not** established.
 - Tag values other than 4, 5 and 6; all error, timeout and reconnection paths;
-  touch and input events; session shutdown; and every operating mode other than
-  the captured one remain unestablished.
+  session shutdown; and every operating mode other than the captured one remain
+  unestablished. (Input events are covered by FED-STREAM-E001.)
+- The differential-JPEG path is never exercised: the gate is established, but no
+  session has enabled it, so what it transmits is unknown.
 - Nothing here authorises transmitting these bytes to an iPad. That is a separate
   decision the user has not taken, and no code in this repository does it.
