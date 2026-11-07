@@ -1,5 +1,11 @@
 # HASHI: resume on Windows after the Fedora investigation
 
+## Active Windows backend result — 2026-11-07
+
+**Fact (WIN-BACKEND-E001–E004):** The working Windows agent PID 21016, executable SHA-256 `cb9ab63be48947344e6d0e5e718e5522e707c64473dac6cc026149424964e52c`, ran LCI captor vtable RVA `0x1ac4b4` and ordinary JPEG encoder vtable RVA `0x1ac818`. The live base was `0x00590000`; the vtable addresses were `0x0073c4b4`/`0x0073c818`. On one normal iPad reconnect, its LCI sizing helper returned 1600×1200 for client 2048×1536, then monitor refresh replaced output dimensions with 1280×960 before JPEG initialization. The selected current Windows LuminonCore mode was also 1280×960; the exact driver/Windows mode-choice cause remains unknown. The user confirmed the extended display works, and the bounded trace detached cleanly. See [Fedora startup validation](docs/fedora-startup-validation.md) for evidence IDs, exact times, registry sources/defaults, failed first hook, full system-inclusive module inventory, hashes and limits.
+
+**Fact:** The first Frida attempt failed at instruction RVA `0x31a26`; its partial raw output is preserved. The successful initialization trace and private 98-file hash index are at `C:\Users\noobieGG\HASHI-private\runs\backend-20261106`; index SHA-256 `f9fcdb8493d4dd8c30c6827b660ab7cf01d87e5d9171ef6cd1f4e5b29fd8981b`. `InitCaptor` failed-initialize fallback is StVD constructor RVA `0x37f10`, correcting the earlier OSBase statement. No protocol replay, driver/display/pairing/vendor change, or study repetition occurred. Do not run the old cable and REA plans below. No push has been requested.
+
 ## Active Fedora continuation — 2026-11-06
 
 **Fact:** The Fedora checkout was clean on `main` at `12d6499` when this continuation began. FED-BACKEND-E001 in [Fedora startup validation](docs/fedora-startup-validation.md) maps the complete five-rung `InitCaptor` priority ladder and seven capture/thread class vtables for the unchanged agent SHA-256 `cb9ab63be48947344e6d0e5e718e5522e707c64473dac6cc026149424964e52c`. The ladder's small integers are exception cleanup states, not persistent backend IDs. Its config source and precise availability tests are still under investigation.
