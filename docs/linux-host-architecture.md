@@ -62,7 +62,11 @@ direct GNOME counterpart:
 | `InjectTouchInput` with `ContactID` | `NotifyTouchDown`/`Motion`/`Up` with a slot |
 | `SendInput` `KEYBDINPUT` `wVk`/`wScan` | `NotifyKeyboardKeycode` |
 
-**Inference, and a genuine simplification.** `NotifyPointerMotionAbsolute` takes
+**Fact as of FED-DBUS-E001 — originally an Inference, now confirmed from
+Mutter's implementation rather than from the method name.** The whole transform
+for a virtual stream is `*x = stream_x + view_layout.x` (likewise for y): a pure
+translation by the monitor's stage position, with no scaling and no
+normalisation. `NotifyPointerMotionAbsolute` takes
 coordinates relative to a **stream**, not to the whole desktop. The decoded
 inbound coordinates are monitor-relative pixels, which is exactly what a
 stream-relative call wants. So the virtual-desktop normalisation the Windows
@@ -92,10 +96,15 @@ and Mutter's touch notifies are per-slot, so the mapping is a direct one.
 - **Fact vs design.** That the methods exist is verified. That they compose into
   a working HASHI host is a **design inference**, not a demonstrated result. No
   session has been created on this machine.
-- The exact parameter contracts of `RecordVirtual` and the `Notify*` calls were
-  **not** verified. Only their names were read out of the installed library.
-  They must be checked against Mutter 51's own interface definitions before code
-  depends on them.
+- ~~The exact parameter contracts of `RecordVirtual` and the `Notify*` calls were
+  **not** verified.~~ **Closed 2026-11-08 as FED-DBUS-E001** — every signature is
+  now verified three ways against the installed 51.1 build (live introspection,
+  the library's own `GDBusMethodInfo` tables, and the unpatched Fedora source
+  RPM). See [Mutter D-Bus contracts](fedora-mutter-dbus-contracts.md). Two
+  results change the design: `RecordVirtual` accepts a **`modes`** key that pins
+  the virtual monitor to exactly 1280×960 and makes the PipeWire stream
+  non-resizable, and `NotifyPointerButton`'s `button` argument is an **evdev**
+  code (`BTN_LEFT` = 272), not a Win32 flag or a Clutter button number.
 - These are Mutter's **private** D-Bus APIs, the ones `gnome-remote-desktop`
   uses, not the portal. They are not a stable public contract and can change
   between GNOME releases. A host pinned to them is pinned to a GNOME version
