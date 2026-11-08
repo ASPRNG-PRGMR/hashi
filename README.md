@@ -45,12 +45,20 @@ cd python && python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode 
   tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host
 ```
 
-The native side, from the repository root:
+Or all of it at once, from the repository root — builds what is present, runs
+the three suites and the conformance comparison, and touches no device:
+
+```sh
+./hashi.sh
+```
+
+The pieces, if you want them separately:
 
 ```sh
 cmake -S native -B native/build && cmake --build native/build -j
 ctest --test-dir native/build       # 5 binaries, 129 tests
-python3 native/tools/conformance.py # 65 vectors, 9 variants, 8 frames
+cd rust && cargo test --offline     # 45 tests
+python3 native/tools/conformance.py # 65 vectors x2, 9 variants, 8 frames
 ./native/build/hashi plan           # what a run would do; touches nothing
 ```
 
@@ -86,9 +94,17 @@ python3 native/tools/conformance.py # 65 vectors, 9 variants, 8 frames
 
 **The port being scope-complete is not the same as it working.** `hashi run` refuses without `--allow-session` and that flag has not been passed: no Mutter session has been opened by the native code, no GStreamer pipeline started, and no byte sent to the iPad from it. The ordering in `session.cpp` is copied from the Python host precisely because that ordering is what FED-HOST-E001 confirmed, but the composition is an **Inference** for this implementation. On the evidence of the Python host's first run, what a first native run would most plausibly expose is teardown ordering and the consumer gate — not the protocol, which is validated twice over.
 
-**Remaining:** a first live run of the native host; the Rust implementation and a shell-script launcher (the same conformance harness applies, and all three comparison kinds are language-agnostic since each diffs text or bytes on stdout); optionally switching `plist.cpp` to the now-installed `libplist` 2.7.0, which is a judgement call rather than a fix; and the unexercised paths. Multi-touch, keyboard, `field0` 16/17, reconfiguration, the TLV `0x70` subtype and differential JPEG remain unexercised **in both implementations** — `field0` 3, 4, 7, 8, 9 and 11–17 have never been seen on the wire, only 5, 6 and 10.
+**Fact (2026-11-09): a third implementation now agrees on the bytes.** `rust/` holds a dependency-free Rust core — usbmux and its plist subset, the handshake, record framing, the inbound decode, the JPEG prelude, Mutter's D-Bus arguments, the pipeline string and the pacer — with 45 tests, clippy clean. Conformance diffs **both** ports against the Python reference: **65 vectors against C++ and 65 against Rust, 0 mismatches**, plus the 9 GVariant payloads and 8 frames. Because nearly every vector is pure computation, Rust reaches the same coverage while linking nothing at all.
 
-**Resume from:** this Current Status section, then [native port](docs/native-port.md) for the current frontier and [Fedora next steps](docs/fedora-next-steps.md) for the older backlog. The Windows return handoff `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; there is no pending Windows work. The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
+Why that is worth more than a third test suite: a test asserts what its author believed, while an independent implementation landing on the same bytes is evidence the decode itself is right. The negative control makes the point concretely — the comparison catches the `0xfc` record's field 1 being "fixed" to big-endian instead of reproduced as the little-endian 5 the agent actually writes, which is exactly the change a careful port would make unprompted. The crate takes no crates for the same reason: three implementations agreeing on bytes means nothing if they share the code that produces them.
+
+**One divergence the port found, and the gap it reveals:** the inbound TLV sanity limit is 4096 in Python and C++; the Rust version was written as `0xFFFFFF` and no vector covers it, because the limit is a *refusal* path rather than a byte on the wire. It is now aligned. Vectors compare what the implementations emit, not what they refuse. See [Rust core](docs/rust-core.md).
+
+**`hashi.sh`** builds whatever is present and runs all three suites plus conformance, defaulting to `check`, which touches no device: `./hashi.sh` to verify, `./hashi.sh plan` to see what a run would do, `./hashi.sh run` for the real thing (the binary still enforces `--allow-session`).
+
+**Remaining:** a first live run of the native host; optionally switching `plist.cpp` to the now-installed `libplist` 2.7.0, which is a judgement call rather than a fix; whether to extend the Rust core with FFI to libjpeg-turbo or a D-Bus crate, which is a real trade-off since each costs the independence that makes its agreement meaningful; and the unexercised paths. Multi-touch, keyboard, `field0` 16/17, reconfiguration, the TLV `0x70` subtype and differential JPEG remain unexercised **in both implementations** — `field0` 3, 4, 7, 8, 9 and 11–17 have never been seen on the wire, only 5, 6 and 10.
+
+**Resume from:** this Current Status section, then [native port](docs/native-port.md) and [Rust core](docs/rust-core.md) for the current frontier and [Fedora next steps](docs/fedora-next-steps.md) for the older backlog. The Windows return handoff `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; there is no pending Windows work. The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
 
 **Historical — returning to Windows with the private transfer ZIP:** this route is closed. `RETURN-TO-WINDOWS.md` and `WINDOWS-CODEX-HANDOFF.md` were removed on 2026-11-08, the protocol work they guided is finished, and the host now runs on Linux (FED-HOST-E001).
 
@@ -131,9 +147,21 @@ This discipline prevents assumptions from silently becoming "facts" as the inves
 |---|---|
 | [`docs/splashtop-xdisplay-reversing-devlog.md`](docs/splashtop-xdisplay-reversing-devlog.md) | Phase 0 architecture discovery: driver enumeration, INF analysis, current model of the Windows host's driver stack. |
 | [`docs/iddcx-reference.md`](docs/iddcx-reference.md) | Distilled reference on Microsoft's IddCx framework: object lifecycle, console vs. remote IDD modes, and the registry-driven debug facilities (frame capture, WPP tracing) that expose ground-truth data without disassembly. |
-| [`docs/driver-build-setup.md`](docs/driver-build-setup.md) | Why and how to build Microsoft's sample IDD driver with debug symbols — toolchain requirements, PDB explanation, setup checklist. **Current active work.** |
+| [`docs/driver-build-setup.md`](docs/driver-build-setup.md) | Why and how to build Microsoft's sample IDD driver with debug symbols — toolchain requirements, PDB explanation, setup checklist. *Historical: the Windows route is closed and no driver build is pending.* |
 | [`docs/reverse-engineering-methodology.md`](docs/reverse-engineering-methodology.md) | Full binary-diffing and driver-analysis workflow: Ghidra + BinDiff setup, how to identify vendor-added code, how to trace host↔driver IPC, and how findings get replaced with open-source Linux code without ever porting Splashtop's own code. |
-| [`docs/study-plan-x64-windows-reversing.md`](docs/study-plan-x64-windows-reversing.md) | Prerequisite-skills plan: x64 assembly and Windows reversing scoped to reading a UMDF/IddCx driver. What to learn, what to skip, day-by-day Week 1 with check questions, outlines for Weeks 2–4, cheat sheets. Exercises in [`study/`](study/). **Current active work.** |
+| [`docs/study-plan-x64-windows-reversing.md`](docs/study-plan-x64-windows-reversing.md) | Prerequisite-skills plan: x64 assembly and Windows reversing scoped to reading a UMDF/IddCx driver. What to learn, what to skip, day-by-day Week 1 with check questions, outlines for Weeks 2–4, cheat sheets. Exercises in [`study/`](study/). *Historical: this phase is complete; do not restart it.* |
+
+The Linux-side reports are the live ones; this table was written during Phase 0
+and the rows above are historical. The current frontier is:
+
+| Document | Covers |
+|---|---|
+| [`docs/native-port.md`](docs/native-port.md) | The C++17 port: its five-target layering, the three kinds of conformance comparison and the negative controls that license them, what each layer had to get right, and why scope-complete is not the same as working. **Current frontier.** |
+| [`docs/rust-core.md`](docs/rust-core.md) | The dependency-free Rust core, why a third implementation is worth more than a third test suite, and the divergence it found. **Current frontier.** |
+| [`docs/fedora-host-live.md`](docs/fedora-host-live.md) | FED-HOST-E001: the host working end to end — generated frames on the iPad, touch moving the Linux pointer, and the traps that cost the most time. |
+| [`docs/fedora-mutter-dbus-contracts.md`](docs/fedora-mutter-dbus-contracts.md) | FED-DBUS-E001: every Mutter 51 `ScreenCast`/`RemoteDesktop` signature verified three ways, the pinned `modes` key, and the evdev button codes. |
+| [`docs/linux-host-architecture.md`](docs/linux-host-architecture.md) | Why a userspace virtual monitor over Mutter's private D-Bus APIs, and what that rules out: no kernel module, no root, no `evdi`. |
+| [`docs/fedora-host-wiring.md`](docs/fedora-host-wiring.md) | How the Python host's layers compose, and what a first run would and would not prove. |
 
 ## Current Architecture (Windows host, as understood so far)
 
