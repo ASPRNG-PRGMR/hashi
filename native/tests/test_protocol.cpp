@@ -5,6 +5,7 @@
 // source of truth rather than against each other.
 #include "testing.hpp"
 
+#include "hashi/gnome.hpp"
 #include "hashi/jpeg.hpp"
 #include "hashi/plist.hpp"
 #include "hashi/startup.hpp"
@@ -640,6 +641,157 @@ TEST("jpeg: parse_segments rejects malformed input") {
   Bytes headerless{0xFF, 0xD8};
   append(headerless, jpeg::build_app0());
   CHECK_THROWS(jpeg::parse_segments(headerless.data(), headerless.size()));
+}
+
+// ---------------------------------------------------------------------------
+// Mutter contract layer
+// ---------------------------------------------------------------------------
+
+TEST("gnome: only the verified interface versions are accepted") {
+  gnome::check_versions(gnome::kVerifiedScreenCastVersion,
+                        gnome::kVerifiedRemoteDesktopVersion);
+  // A newer version is refused too, not just an older one: these are private
+  // APIs, and a changed `modes` contract would surface only as wrong-sized
+  // frames.
+  CHECK_THROWS(gnome::check_versions(5, 1));
+  CHECK_THROWS(gnome::check_versions(3, 1));
+  CHECK_THROWS(gnome::check_versions(4, 2));
+}
+
+TEST("gnome: the device-type bitmask is checked for coverage") {
+  const int all = gnome::kDeviceTypeKeyboard | gnome::kDeviceTypePointer |
+                  gnome::kDeviceTypeTouchscreen;
+  CHECK_EQ(all, 7);  // the SupportedDeviceTypes value Mutter 51.1 reports
+  CHECK(gnome::supports_device_types(all, gnome::kDeviceTypePointer));
+  CHECK(gnome::supports_device_types(all, all));
+  CHECK(!gnome::supports_device_types(gnome::kDeviceTypeKeyboard,
+                                      gnome::kDeviceTypePointer));
+}
+
+TEST("gnome: the default mode pins 1280x960 at 30 Hz and is preferred") {
+  const auto mode = gnome::virtual_monitor_mode();
+  CHECK_EQ(gnome::canonical(mode),
+           std::string("{is-preferred=b:true,refresh-rate=d:30.000000,"
+                       "size=(uu):(1280,960)}"));
+}
+
+TEST("gnome: a zero refresh rate omits the key so Mutter defaults it") {
+  const auto mode = gnome::virtual_monitor_mode(1280, 960, 0.0);
+  CHECK_EQ(gnome::canonical(mode),
+           std::string("{is-preferred=b:true,size=(uu):(1280,960)}"));
+}
+
+TEST("gnome: a non-positive dimension is refused before Mutter sees it") {
+  CHECK_THROWS(gnome::virtual_monitor_mode(0, 960));
+  CHECK_THROWS(gnome::virtual_monitor_mode(1280, 0));
+  CHECK_THROWS(gnome::virtual_monitor_mode(1280, 960, -1.0));
+}
+
+TEST("gnome: RecordVirtual defaults to a pinned mode and embedded cursor") {
+  const auto properties = gnome::record_virtual_properties();
+  CHECK_EQ(gnome::canonical(properties),
+           std::string("{cursor-mode=u:1,modes=aa{sv}:["
+                       "{is-preferred=b:true,refresh-rate=d:30.000000,"
+                       "size=(uu):(1280,960)}]}"));
+  // is-platform is absent unless asked for: setting it suppresses the sharing
+  // indicator, which is the user's decision to make.
+  CHECK(gnome::canonical(properties).find("is-platform") == std::string::npos);
+}
+
+TEST("gnome: the preferred-mode count is enforced") {
+  // Mutter rejects both 'No preferred modes' and 'Multiple preferred modes'.
+  std::vector<gnome::PropDict> none{
+      gnome::virtual_monitor_mode(1280, 960, 30.0, false)};
+  CHECK_THROWS(gnome::record_virtual_properties(none));
+
+  std::vector<gnome::PropDict> two{gnome::virtual_monitor_mode(),
+                                   gnome::virtual_monitor_mode(640, 480)};
+  CHECK_THROWS(gnome::record_virtual_properties(two));
+
+  std::vector<gnome::PropDict> one{
+      gnome::virtual_monitor_mode(),
+      gnome::virtual_monitor_mode(640, 480, 60.0, false)};
+  CHECK(gnome::record_virtual_properties(one).size() == 2);
+}
+
+TEST("gnome: an unknown cursor mode is refused") {
+  CHECK_THROWS(gnome::record_virtual_properties({}, 3));
+}
+
+TEST("gnome: ScreenCast session properties omit what was not given") {
+  CHECK_EQ(gnome::canonical(gnome::screen_cast_session_properties()),
+           std::string("{}"));
+  CHECK_EQ(gnome::canonical(gnome::screen_cast_session_properties("17")),
+           std::string("{remote-desktop-session-id=s:\"17\"}"));
+}
+
+TEST("gnome: field0 5 and 6 map to the evdev left button, not a Win32 flag") {
+  CHECK_EQ(gnome::evdev_button_for_field0(5), gnome::kBtnLeft);
+  CHECK_EQ(gnome::evdev_button_for_field0(6), gnome::kBtnLeft);
+  CHECK_EQ(gnome::kBtnLeft, 272);
+  // Statically decoded, never observed: right and middle.
+  CHECK_EQ(gnome::evdev_button_for_field0(8), gnome::kBtnRight);
+  CHECK_EQ(gnome::evdev_button_for_field0(14), gnome::kBtnMiddle);
+  // No button meaning.
+  CHECK_EQ(gnome::evdev_button_for_field0(10), 0);
+  CHECK_EQ(gnome::evdev_button_for_field0(1), 0);
+}
+
+TEST("gnome: a button record moves before it presses") {
+  // The iPad sends coordinates with every record and a tap arrives as a bare
+  // 5 -> 6 with no motion record first, so the position has to be applied
+  // before the press or it lands wherever the pointer happened to be.
+  const auto plan = gnome::plan_injection(5, 100, 200, "/stream");
+  CHECK_EQ(plan.size(), std::size_t{2});
+  CHECK_EQ(plan[0].method, std::string("NotifyPointerMotionAbsolute"));
+  CHECK_EQ(plan[1].method, std::string("NotifyPointerButton"));
+  CHECK_EQ(plan[1].args.at(0).as_int32(), gnome::kBtnLeft);
+  CHECK(plan[1].args.at(1).as_bool());
+  // 6 is the release of the same button.
+  const auto up = gnome::plan_injection(6, 100, 200, "/stream");
+  CHECK(!up[1].args.at(1).as_bool());
+}
+
+TEST("gnome: coordinates pass straight through as doubles") {
+  // Mutter adds the monitor's stage offset itself, so there is no transform
+  // here to reproduce -- the Windows 65535 normalisation has no counterpart.
+  const auto plan = gnome::plan_injection(10, 640, 480, "/stream");
+  CHECK_EQ(plan.size(), std::size_t{1});
+  CHECK_EQ(plan[0].args.at(1).as_double(), 640.0);
+  CHECK_EQ(plan[0].args.at(2).as_double(), 480.0);
+}
+
+TEST("gnome: field0 values with no pointer meaning plan nothing") {
+  for (int field0 : {1, 2, 3, 11, 12, 13, 16, 17}) {
+    CHECK(gnome::plan_injection(field0, 10, 10, "/stream").empty());
+  }
+}
+
+TEST("gnome: a coordinate outside the display is a fault, not clamped") {
+  CHECK_THROWS(gnome::plan_injection(10, 1281, 0, "/stream"));
+  CHECK_THROWS(gnome::plan_injection(10, 0, 961, "/stream"));
+  CHECK_THROWS(gnome::plan_injection(10, -1, 0, "/stream"));
+  // The far corner is inside, inclusively.
+  CHECK(!gnome::plan_injection(10, 1280, 960, "/stream").empty());
+}
+
+TEST("gnome: a plan needs the stream path it passes as an argument") {
+  CHECK_THROWS(gnome::plan_injection(10, 0, 0, ""));
+}
+
+TEST("gnome: a value reports its signature and refuses the wrong accessor") {
+  CHECK_EQ(gnome::PropValue::uint32(1).signature(), std::string("u"));
+  CHECK_EQ(gnome::PropValue::int32(1).signature(), std::string("i"));
+  CHECK_EQ(gnome::PropValue::size(1, 2).signature(), std::string("(uu)"));
+  CHECK_THROWS(gnome::PropValue::uint32(1).as_int32());
+  CHECK_THROWS(gnome::PropValue::real(1.0).as_bool());
+}
+
+TEST("gnome: a duplicate dictionary key is refused rather than silently lost") {
+  gnome::PropDict duplicated;
+  duplicated.emplace_back("cursor-mode", gnome::PropValue::uint32(1));
+  duplicated.emplace_back("cursor-mode", gnome::PropValue::uint32(2));
+  CHECK_THROWS(gnome::canonical(duplicated));
 }
 
 int main() { return ::testing::run_all(); }

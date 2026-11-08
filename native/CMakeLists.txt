@@ -18,6 +18,7 @@ add_library(hashi_protocol STATIC
   src/startup.cpp
   src/stream.cpp
   src/jpeg.cpp
+  src/gnome.cpp
 )
 target_include_directories(hashi_protocol PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include)

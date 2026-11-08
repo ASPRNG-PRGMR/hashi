@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <string>
 
+#include "hashi/gnome.hpp"
 #include "hashi/jpeg.hpp"
 #include "hashi/startup.hpp"
 #include "hashi/stream.hpp"
@@ -84,6 +85,75 @@ int main() {
   emit("jpeg_sos", jpeg::build_sos());
   emit("jpeg_prelude_observed", jpeg::build_prelude());
   emit("jpeg_prelude_odd", jpeg::build_prelude(17, 5, 25, 72));
+
+  // --- Mutter D-Bus arguments and injection plans -----------------------
+  // Compared as a canonical text form rather than as bytes: GLib builds the
+  // actual message, so what matters is that both implementations decide on the
+  // same signatures, keys, defaults and values. This is where a port degrades
+  // quietly -- a uint32 cursor mode sent as an int32, or a default that drifts.
+  {
+    const std::string stream = "/org/gnome/Mutter/ScreenCast/Stream/u0";
+    auto emit_text = [](const std::string& name, const std::string& text) {
+      std::printf("%s %s\n", name.c_str(), text.c_str());
+    };
+
+    emit_text("gnome_mode_default", gnome::canonical(gnome::virtual_monitor_mode()));
+    // A zero rate omits the key; Mutter then defaults the rate to 60.0.
+    emit_text("gnome_mode_no_refresh",
+              gnome::canonical(gnome::virtual_monitor_mode(1280, 960, 0.0)));
+    emit_text("gnome_mode_custom",
+              gnome::canonical(gnome::virtual_monitor_mode(640, 480, 59.94, false)));
+
+    emit_text("gnome_record_virtual_default",
+              gnome::canonical(gnome::record_virtual_properties()));
+    emit_text("gnome_record_virtual_cursor_hidden",
+              gnome::canonical(gnome::record_virtual_properties(
+                  {}, gnome::kCursorModeHidden)));
+    emit_text("gnome_record_virtual_platform_true",
+              gnome::canonical(gnome::record_virtual_properties(
+                  {}, gnome::kCursorModeEmbedded, 1)));
+    emit_text("gnome_record_virtual_platform_false",
+              gnome::canonical(gnome::record_virtual_properties(
+                  {}, gnome::kCursorModeEmbedded, 0)));
+
+    emit_text("gnome_session_props_empty",
+              gnome::canonical(gnome::screen_cast_session_properties()));
+    emit_text("gnome_session_props_id",
+              gnome::canonical(gnome::screen_cast_session_properties("17")));
+    emit_text("gnome_session_props_both",
+              gnome::canonical(gnome::screen_cast_session_properties("17", 1)));
+
+    // One line per planned call, joined, so an extra or missing call shows up.
+    auto emit_plan = [&](const std::string& name, int field0, int x, int y) {
+      const auto plan = gnome::plan_injection(field0, x, y, stream);
+      std::string text = "[";
+      for (std::size_t i = 0; i < plan.size(); ++i) {
+        if (i != 0) text += ",";
+        text += gnome::canonical(plan[i]);
+      }
+      text += "]";
+      std::printf("%s %s\n", name.c_str(), text.c_str());
+    };
+
+    emit_plan("gnome_inject_down", 5, 100, 200);
+    emit_plan("gnome_inject_up", 6, 100, 200);
+    emit_plan("gnome_inject_motion", 10, 640, 480);
+    emit_plan("gnome_inject_right_down", 8, 1, 2);
+    emit_plan("gnome_inject_right_up", 9, 1, 2);
+    emit_plan("gnome_inject_middle_down", 14, 3, 4);
+    emit_plan("gnome_inject_middle_up", 15, 3, 4);
+    emit_plan("gnome_inject_move_only_4", 4, 5, 6);
+    emit_plan("gnome_inject_move_only_7", 7, 5, 6);
+    // Origin and the far corner: both are inside the display, inclusive.
+    emit_plan("gnome_inject_origin", 10, 0, 0);
+    emit_plan("gnome_inject_corner", 10, 1280, 960);
+    // Values with no pointer meaning must plan nothing at all.
+    emit_plan("gnome_inject_keyboard_1", 1, 10, 10);
+    emit_plan("gnome_inject_keyboard_2", 2, 10, 10);
+    emit_plan("gnome_inject_control_16", 16, 10, 10);
+    emit_plan("gnome_inject_control_17", 17, 10, 10);
+    emit_plan("gnome_inject_unseen_11", 11, 10, 10);
+  }
 
   // --- usbmux header framing -------------------------------------------
   // The plist body itself is not compared: usbmuxd parses XML, and the two

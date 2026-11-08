@@ -11,7 +11,11 @@ Two kinds of check run here:
 
 * **Vectors** -- fixed byte strings both implementations build from the same
   inputs: the startup handshake, record framing, the usbmux header and the
-  JPEG frame prelude.
+  JPEG frame prelude. The Mutter D-Bus arguments and injection plans are
+  compared here too, as a canonical text form: GLib builds the actual message,
+  so what has to agree is the signatures, keys, defaults and values. That is
+  where a port degrades quietly -- a uint32 cursor mode sent as an int32, or a
+  default that drifts away from the verified contract.
 * **Frames** -- whole JPEG frames, scan data included, encoded from identical
   pixel buffers. The Python side reaches libjpeg-turbo through Pillow and the
   C++ side through the TurboJPEG API, so this is the check that the entropy
@@ -36,6 +40,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 # The Python reference implementation lives in python/.
 sys.path.insert(0, str(ROOT / "python"))
 
+import hashi_gnome as gnome  # noqa: E402
 import hashi_jpeg as jpeg  # noqa: E402
 import hashi_startup as startup  # noqa: E402
 import hashi_stream as stream  # noqa: E402
@@ -98,7 +103,114 @@ def reference() -> dict[str, str]:
     put("jpeg_sos", jpeg.build_sos())
     put("jpeg_prelude_observed", jpeg.build_prelude())
     put("jpeg_prelude_odd", jpeg.build_prelude(17, 5, 25, 72))
+
+    # --- Mutter D-Bus arguments -------------------------------------------
+    # Not named `stream`: that is the hashi_stream module in this scope.
+    stream_path = "/org/gnome/Mutter/ScreenCast/Stream/u0"
+    out["gnome_mode_default"] = _canonical_dict(gnome.virtual_monitor_mode())
+    out["gnome_mode_no_refresh"] = _canonical_dict(
+        gnome.virtual_monitor_mode(1280, 960, None))
+    out["gnome_mode_custom"] = _canonical_dict(
+        gnome.virtual_monitor_mode(640, 480, 59.94, is_preferred=False))
+
+    out["gnome_record_virtual_default"] = _canonical_dict(
+        gnome.record_virtual_properties())
+    out["gnome_record_virtual_cursor_hidden"] = _canonical_dict(
+        gnome.record_virtual_properties(cursor_mode=gnome.CURSOR_MODE_HIDDEN))
+    out["gnome_record_virtual_platform_true"] = _canonical_dict(
+        gnome.record_virtual_properties(is_platform=True))
+    out["gnome_record_virtual_platform_false"] = _canonical_dict(
+        gnome.record_virtual_properties(is_platform=False))
+
+    out["gnome_session_props_empty"] = _canonical_dict(
+        gnome.screen_cast_session_properties())
+    out["gnome_session_props_id"] = _canonical_dict(
+        gnome.screen_cast_session_properties("17"))
+    out["gnome_session_props_both"] = _canonical_dict(
+        gnome.screen_cast_session_properties("17", disable_animations=True))
+
+    def plan(name: str, field0: int, x: int, y: int) -> None:
+        out[name] = _canonical_plan(
+            gnome.plan_injection(field0, x, y, stream_path=stream_path))
+
+    plan("gnome_inject_down", 5, 100, 200)
+    plan("gnome_inject_up", 6, 100, 200)
+    plan("gnome_inject_motion", 10, 640, 480)
+    plan("gnome_inject_right_down", 8, 1, 2)
+    plan("gnome_inject_right_up", 9, 1, 2)
+    plan("gnome_inject_middle_down", 14, 3, 4)
+    plan("gnome_inject_middle_up", 15, 3, 4)
+    plan("gnome_inject_move_only_4", 4, 5, 6)
+    plan("gnome_inject_move_only_7", 7, 5, 6)
+    plan("gnome_inject_origin", 10, 0, 0)
+    plan("gnome_inject_corner", 10, 1280, 960)
+    plan("gnome_inject_keyboard_1", 1, 10, 10)
+    plan("gnome_inject_keyboard_2", 2, 10, 10)
+    plan("gnome_inject_control_16", 16, 10, 10)
+    plan("gnome_inject_control_17", 17, 10, 10)
+    plan("gnome_inject_unseen_11", 11, 10, 10)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Canonical rendering of D-Bus arguments
+# ---------------------------------------------------------------------------
+#
+# Must match hashi::gnome::canonical exactly. Doubles use %.6f because Python
+# and C++ disagree about how to print a float, and that disagreement would
+# otherwise read as a protocol difference.
+
+
+def _canonical_value(signature: str, value: object) -> str:
+    if signature == "b":
+        return "b:" + ("true" if value else "false")
+    if signature == "u":
+        return f"u:{value}"
+    if signature == "i":
+        return f"i:{value}"
+    if signature == "d":
+        return f"d:{float(value):.6f}"
+    if signature == "s":
+        return f's:"{value}"'
+    if signature == "(uu)":
+        width, height = value  # type: ignore[misc]
+        return f"(uu):({width},{height})"
+    if signature == "aa{sv}":
+        inner = ",".join(_canonical_dict(d) for d in value)  # type: ignore
+        return f"aa{{sv}}:[{inner}]"
+    raise AssertionError(f"no canonical form for signature {signature}")
+
+
+def _canonical_dict(dictionary: dict[str, tuple[str, object]]) -> str:
+    body = ",".join(f"{key}={_canonical_value(*dictionary[key])}"
+                    for key in sorted(dictionary))
+    return "{" + body + "}"
+
+
+def _signature_of(value: object) -> str:
+    """The signature the C++ side carries for an injection argument.
+
+    bool is checked before int because in Python it is a subclass of one, and
+    the two are different D-Bus types.
+    """
+    if isinstance(value, bool):
+        return "b"
+    if isinstance(value, int):
+        return "i"
+    if isinstance(value, float):
+        return "d"
+    if isinstance(value, str):
+        return "s"
+    raise AssertionError(f"no signature for {value!r}")
+
+
+def _canonical_call(call: gnome.InjectionCall) -> str:
+    args = ",".join(_canonical_value(_signature_of(a), a) for a in call.args)
+    return f"{call.method}({args})"
+
+
+def _canonical_plan(calls: list[gnome.InjectionCall]) -> str:
+    return "[" + ",".join(_canonical_call(c) for c in calls) + "]"
 
 
 # ---------------------------------------------------------------------------
