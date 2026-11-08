@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <string>
 
+#include "hashi/jpeg.hpp"
 #include "hashi/startup.hpp"
 #include "hashi/stream.hpp"
 #include "hashi/usbmux.hpp"
@@ -47,6 +48,42 @@ int main() {
     record.resize(8);  // header plus a few bytes is enough to compare framing
     emit("image_record_1000_head", record);
   }
+
+  // --- JPEG frame prelude ----------------------------------------------
+  // Marker bytes only: the prelude is built from published Annex K tables, so
+  // it is part of the dependency-free core. The entropy coder is compared
+  // separately, on whole frames, by dump_frame.
+  emit("jpeg_app0", jpeg::build_app0());
+  emit("jpeg_app0_density_72", jpeg::build_app0(72));
+  emit("jpeg_dqt_luma_q80", jpeg::build_dqt(jpeg::kBaseLumaQTable, 0, 80));
+  emit("jpeg_dqt_chroma_q80", jpeg::build_dqt(jpeg::kBaseChromaQTable, 1, 80));
+  // Below 50 the IJG formula switches branch, and 100 is the clamp boundary.
+  emit("jpeg_dqt_luma_q25", jpeg::build_dqt(jpeg::kBaseLumaQTable, 0, 25));
+  emit("jpeg_dqt_luma_q100", jpeg::build_dqt(jpeg::kBaseLumaQTable, 0, 100));
+  emit("jpeg_dqt_luma_q1", jpeg::build_dqt(jpeg::kBaseLumaQTable, 0, 1));
+  emit("jpeg_sof0_1280x960", jpeg::build_sof0(1280, 960));
+  emit("jpeg_sof0_odd", jpeg::build_sof0(17, 5));
+  emit("jpeg_dht_dc_luma",
+       jpeg::build_dht(0, 0, jpeg::kDcLumaCounts.data(),
+                       jpeg::kDcLumaCounts.size(), jpeg::kDcLumaValues.data(),
+                       jpeg::kDcLumaValues.size()));
+  emit("jpeg_dht_ac_luma",
+       jpeg::build_dht(1, 0, jpeg::kAcLumaCounts.data(),
+                       jpeg::kAcLumaCounts.size(), jpeg::kAcLumaValues.data(),
+                       jpeg::kAcLumaValues.size()));
+  emit("jpeg_dht_dc_chroma",
+       jpeg::build_dht(0, 1, jpeg::kDcChromaCounts.data(),
+                       jpeg::kDcChromaCounts.size(),
+                       jpeg::kDcChromaValues.data(),
+                       jpeg::kDcChromaValues.size()));
+  emit("jpeg_dht_ac_chroma",
+       jpeg::build_dht(1, 1, jpeg::kAcChromaCounts.data(),
+                       jpeg::kAcChromaCounts.size(),
+                       jpeg::kAcChromaValues.data(),
+                       jpeg::kAcChromaValues.size()));
+  emit("jpeg_sos", jpeg::build_sos());
+  emit("jpeg_prelude_observed", jpeg::build_prelude());
+  emit("jpeg_prelude_odd", jpeg::build_prelude(17, 5, 25, 72));
 
   // --- usbmux header framing -------------------------------------------
   // The plist body itself is not compared: usbmuxd parses XML, and the two

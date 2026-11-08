@@ -17,6 +17,7 @@ add_library(hashi_protocol STATIC
   src/usbmux.cpp
   src/startup.cpp
   src/stream.cpp
+  src/jpeg.cpp
 )
 target_include_directories(hashi_protocol PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -24,10 +25,25 @@ target_compile_options(hashi_protocol PRIVATE
   -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
 # The protocol core deliberately has no dependencies beyond the standard
-# library. usbmuxd speaks XML plists and libplist's development package is not
-# installed here, so the small subset this needs is implemented and tested
-# rather than pulled in. The later milestones (GIO for Mutter's D-Bus,
-# GStreamer for capture, libjpeg-turbo for encoding) link their own.
+# library -- src/jpeg.cpp belongs to it because the frame prelude is marker
+# bytes built from published Annex K tables, not an encoder. usbmuxd speaks XML
+# plists and libplist's development package was missing when this was written,
+# so the small subset this needs is implemented and tested rather than pulled
+# in. Layers that genuinely need a library link it in their own target below.
+
+find_package(PkgConfig REQUIRED)
+
+# --- Frame encoding ---------------------------------------------------------
+# libjpeg-turbo through its own TurboJPEG API. The Python reference reaches the
+# same library through Pillow, and the conformance harness checks that the two
+# agree on bytes rather than assuming that "both use libjpeg" is enough.
+pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
+
+add_library(hashi_encode STATIC src/encoder.cpp)
+target_link_libraries(hashi_encode PUBLIC hashi_protocol
+                                   PRIVATE PkgConfig::TURBOJPEG)
+target_compile_options(hashi_encode PRIVATE
+  -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
 enable_testing()
 add_executable(test_protocol tests/test_protocol.cpp)
@@ -37,7 +53,22 @@ target_include_directories(test_protocol PRIVATE
 target_compile_options(test_protocol PRIVATE -Wall -Wextra)
 add_test(NAME protocol COMMAND test_protocol)
 
+# The encoder's tests link libjpeg-turbo, so they are a separate binary from
+# the dependency-free core's.
+add_executable(test_encode tests/test_encode.cpp)
+target_link_libraries(test_encode PRIVATE hashi_encode)
+target_include_directories(test_encode PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+target_compile_options(test_encode PRIVATE -Wall -Wextra)
+add_test(NAME encode COMMAND test_encode)
+
 # Emits the core's wire bytes for native/tools/conformance.py to diff against
 # the Python reference implementation.
 add_executable(dump_vectors tools/dump_vectors.cpp)
 target_link_libraries(dump_vectors PRIVATE hashi_protocol)
+
+# Encodes one raw-RGB fixture so the harness can diff a whole frame, scan data
+# included, against what Pillow produces from the same pixels.
+add_executable(dump_frame tools/dump_frame.cpp)
+target_link_libraries(dump_frame PRIVATE hashi_encode)
+target_compile_options(dump_frame PRIVATE -Wall -Wextra)

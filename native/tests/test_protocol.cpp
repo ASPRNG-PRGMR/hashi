@@ -5,6 +5,7 @@
 // source of truth rather than against each other.
 #include "testing.hpp"
 
+#include "hashi/jpeg.hpp"
 #include "hashi/plist.hpp"
 #include "hashi/startup.hpp"
 #include "hashi/stream.hpp"
@@ -527,6 +528,118 @@ TEST("demuxer: a full observed drag reassembles") {
   CHECK_EQ(records.size(), std::size_t{22});
   CHECK_EQ(records.front().field0, stream::kPointerDown);
   CHECK_EQ(records.back().field0, stream::kPointerUp);
+}
+
+// ---------------------------------------------------------------------------
+// JPEG frame prelude
+// ---------------------------------------------------------------------------
+//
+// These assert the captured values -- 623 bytes of prelude, a 609-byte header
+// portion, the observed segment order -- the same values the Python tests
+// assert, so both implementations are checked against the capture rather than
+// against each other.
+
+TEST("jpeg: the default prelude is the captured 623 bytes") {
+  const Bytes prelude = jpeg::build_prelude();
+  CHECK_EQ(prelude.size(), jpeg::kObservedPreludeLen);
+  // SOI, then the 609-byte header portion, then the 14-byte SOS.
+  CHECK_EQ(prelude.size() - jpeg::build_sos().size(),
+           jpeg::kObservedHeaderLen);
+  CHECK_EQ(prelude[0], std::uint8_t{0xFF});
+  CHECK_EQ(prelude[1], std::uint8_t{0xD8});
+}
+
+TEST("jpeg: the prelude carries the observed segment order") {
+  const Bytes prelude = jpeg::build_prelude();
+  const auto segments = jpeg::parse_segments(prelude.data(), prelude.size());
+  const std::vector<std::uint8_t> want{0xD8, 0xE0, 0xDB, 0xDB, 0xC0,
+                                       0xC4, 0xC4, 0xC4, 0xC4, 0xDA};
+  std::vector<std::uint8_t> got;
+  for (const auto& segment : segments) got.push_back(segment.marker);
+  CHECK_EQ(got, want);
+}
+
+TEST("jpeg: quality 80 scaling is the standard IJG formula") {
+  // 200 - 2*80 = 40, so each coefficient is (base*40 + 50)/100.
+  const auto scaled = jpeg::scale_qtable(jpeg::kBaseLumaQTable, 80);
+  CHECK_EQ(scaled[0], std::uint8_t{6});   // (16*40 + 50)/100 = 6
+  CHECK_EQ(scaled[1], std::uint8_t{4});   // (11*40 + 50)/100 = 4
+  CHECK_EQ(scaled[63], std::uint8_t{40}); // (99*40 + 50)/100 = 40
+}
+
+TEST("jpeg: the scaling branch below quality 50 and the clamps") {
+  // Under 50 the divisor branch applies: scale = 5000/quality.
+  const auto low = jpeg::scale_qtable(jpeg::kBaseLumaQTable, 25);
+  CHECK_EQ(low[0], std::uint8_t{32});  // 5000/25 = 200; (16*200+50)/100 = 32
+  // Quality 1 saturates most coefficients at the 255 ceiling.
+  const auto worst = jpeg::scale_qtable(jpeg::kBaseLumaQTable, 1);
+  CHECK_EQ(worst[0], std::uint8_t{255});
+  // Quality 100 gives scale 0, and the floor of 1 keeps the table legal:
+  // a zero quantizer would be a division by zero in a decoder.
+  const auto best = jpeg::scale_qtable(jpeg::kBaseLumaQTable, 100);
+  CHECK_EQ(best[0], std::uint8_t{1});
+  CHECK_EQ(best[63], std::uint8_t{1});
+}
+
+TEST("jpeg: DQT stores coefficients in zig-zag order") {
+  const Bytes dqt = jpeg::build_dqt(jpeg::kBaseLumaQTable, 0, 80);
+  CHECK_EQ(dqt.size(), std::size_t{69});  // marker + length + id + 64
+  CHECK_EQ(dqt[4], std::uint8_t{0});      // table id
+  const auto scaled = jpeg::scale_qtable(jpeg::kBaseLumaQTable, 80);
+  // Zig-zag position 2 is natural index 8, i.e. the second row's first entry.
+  CHECK_EQ(dqt[5 + 2], scaled[8]);
+}
+
+TEST("jpeg: SOF0 declares 4:2:0 at the requested size") {
+  const Bytes sof = jpeg::build_sof0(1280, 960);
+  CHECK_EQ(sof.size(), std::size_t{19});
+  CHECK_EQ(sof[4], std::uint8_t{8});  // sample precision
+  // Height precedes width in SOF0, which is the opposite of how the rest of
+  // this protocol orders a size.
+  CHECK_EQ(static_cast<int>(sof[5]) << 8 | sof[6], 960);
+  CHECK_EQ(static_cast<int>(sof[7]) << 8 | sof[8], 1280);
+  CHECK_EQ(sof[9], std::uint8_t{3});     // three components
+  CHECK_EQ(sof[11], std::uint8_t{0x22});  // luma sampling factors: 4:2:0
+  CHECK_EQ(sof[14], std::uint8_t{0x11});
+  CHECK_EQ(sof[17], std::uint8_t{0x11});
+}
+
+TEST("jpeg: APP0 declares dpi units and the observed density") {
+  const Bytes app0 = jpeg::build_app0();
+  CHECK_EQ(app0.size(), std::size_t{18});
+  CHECK_EQ(app0[11], std::uint8_t{1});  // units = 1, i.e. dots per inch
+  CHECK_EQ(static_cast<int>(app0[12]) << 8 | app0[13], 120);
+  CHECK_EQ(static_cast<int>(app0[14]) << 8 | app0[15], 120);
+}
+
+TEST("jpeg: a DHT whose counts disagree with its values is rejected") {
+  const std::uint8_t counts[16] = {0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  const std::uint8_t values[1] = {0};
+  CHECK_THROWS(jpeg::build_dht(0, 0, counts, 16, values, 1));
+}
+
+TEST("jpeg: out-of-range parameters are rejected") {
+  CHECK_THROWS(jpeg::scale_qtable(jpeg::kBaseLumaQTable, 0));
+  CHECK_THROWS(jpeg::scale_qtable(jpeg::kBaseLumaQTable, 101));
+  CHECK_THROWS(jpeg::build_dqt(jpeg::kBaseLumaQTable, 2, 80));
+  CHECK_THROWS(jpeg::build_sof0(0, 960));
+  CHECK_THROWS(jpeg::build_sof0(1280, 0x10000));
+  CHECK_THROWS(jpeg::build_app0(0));
+}
+
+TEST("jpeg: parse_segments rejects malformed input") {
+  const Bytes no_soi{0x00, 0x00, 0x00, 0x00};
+  CHECK_THROWS(jpeg::parse_segments(no_soi.data(), no_soi.size()));
+  // SOI followed by a segment claiming more length than there is data.
+  const Bytes overlong{0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xFF};
+  CHECK_THROWS(jpeg::parse_segments(overlong.data(), overlong.size()));
+  // A length below the two bytes the field itself occupies.
+  const Bytes tiny{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x01};
+  CHECK_THROWS(jpeg::parse_segments(tiny.data(), tiny.size()));
+  // No SOS anywhere.
+  Bytes headerless{0xFF, 0xD8};
+  append(headerless, jpeg::build_app0());
+  CHECK_THROWS(jpeg::parse_segments(headerless.data(), headerless.size()));
 }
 
 int main() { return ::testing::run_all(); }
