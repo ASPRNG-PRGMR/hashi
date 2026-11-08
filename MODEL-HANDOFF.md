@@ -114,7 +114,7 @@ python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
   tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host
 ```
 
-249 tests, passing. Reuse these rather than rewriting them.
+261 tests, passing. Reuse these rather than rewriting them.
 
 ## What FED-START-E001 settled
 
@@ -266,20 +266,47 @@ for 51.1 only, and `check_versions` refuses anything else.
 
 ## Next task, in order — there is no pending Windows work
 
-1. **Run it.** The wiring is written — `hashi_host.py`, with
-   `docs/fedora-host-wiring.md` — and **never executed**; that report carries
-   no evidence ID for exactly that reason. Do a first run in two stages,
-   because they fail independently: (a) no device — open the virtual monitor,
-   assert `Stream.Parameters` reports `size = (1280, 960)`, capture a few
-   frames and check each is 1280x960 and encodes; (b) with the device — stream
-   `SolidColourSource` first (the byte-exact known-good frames), then live
-   capture, then touch the screen to check injection. Creating a session has
-   user-visible effects (a monitor appears, a sharing indicator shows), so
-   **tell the user before creating one**; and the 2026-11-08 authority to send
-   bytes to the iPad is **spent**, so ask again.
-   Note that injection cannot be verified from D-Bus replies: Mutter drops
-   early motion and returns success anyway, so watching the pointer is the
-   only test.
+## FED-HOST-E001: the host works end to end — do not re-prove it
+
+**Fact (2026-11-08).** The iPad displayed frames HASHI **generated** from a
+real Mutter virtual monitor, and touches moved the **Linux** pointer. Pinned
+1280x960 negotiated exactly; handshake returned the usual 2048x1536 /
+`diff_jpeg=False` (third identical confirmation); a 30 s run gave **1,540
+inbound records -> 1,540 injected** and **820 damage-driven captures** — a
+static virtual monitor is never damaged, so 820 captures is the system's own
+proof the pointer was moving. ~26.5 fps at ~372 KB/frame (~10 MB/s).
+See `docs/fedora-host-live.md`; run `fedora-host-20261108T080007Z`, index
+SHA-256 `669db3bf4578aff81d4a8bcd878cbc2706f18da8138414b9e79c65b41088de12`.
+
+**THE TRAP — read before touching the input path.**
+`NotifyPointerMotionAbsolute` is **silently discarded until something is
+consuming the PipeWire stream**, while the D-Bus call returns success.
+`NotifyPointerButton` has no stream argument and no transform, so it lands
+regardless: the symptom is **clicks at a stale pointer position — selected
+text, windows behaving oddly — with a pointer that never moves**, and no error
+anywhere. Measured with Mutter's idle timer: 40 motion calls took idle
+14,741 -> 15,605 ms (climbing) with no consumer, and 20,683 -> **21 ms** with
+one. `VirtualDisplaySession.inject` now refuses unless `stream_consumed`.
+
+**Correction to FED-DBUS-E001:** do **not** assert geometry via
+`Stream.Parameters`. A virtual stream exposes only `mapping-id` —
+`set_stream_parameters` has branches for monitor/area/window and none for
+virtual, and runs before the monitor exists. Assert the negotiated PipeWire
+caps instead; the pipeline pins them, so a wrong size fails negotiation.
+
+**Other facts the first run established:** the stream negotiates
+`framerate=0/1` (damage-driven), so an idle monitor yields **no** buffers and
+the host must repeat its last frame rather than treat a timeout as an error;
+and usbmuxd **reassigns `DeviceID` on every attach**, so it must be discovered
+via `ListDevices` — a hard-coded `1` failed the next session with
+`BADDEV (Number=2)`.
+
+## Next task, in order — there is no pending Windows work
+
+1. **Efficiency.** Every frame is re-sent in full (~372 KB) even when nothing
+   changed. Not re-sending an unchanged frame is the obvious saving; the
+   protocol's `diff_jpeg` path exists for this but the device gates it off and
+   it was never observed, so it cannot be implemented.
 2. **Assert, don't assume, the captured size.** Check the PipeWire buffer is
    1280×960 and that `Stream.Parameters` reports `size = (1280, 960)`. The JPEG
    prelude hard-codes that size, and if the virtual monitor ends up scaled, the
