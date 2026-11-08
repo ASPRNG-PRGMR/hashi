@@ -54,6 +54,14 @@ class FrameSource {
   virtual ~FrameSource() = default;
   virtual Bytes next_payload() = 0;
   virtual void close() {}
+
+  /// How many frames have been pulled from a PipeWire stream.
+  ///
+  /// Nonzero is the host's proof that something is consuming the stream, which
+  /// is what makes absolute motion land. A source that does not read from
+  /// PipeWire reports zero and therefore never provides that proof -- which is
+  /// correct, not a limitation: it genuinely is not a consumer.
+  virtual std::uint64_t pipewire_frames_captured() const { return 0; }
 };
 
 /// A fixed solid colour. Used to prove the wire path without a compositor.
@@ -110,6 +118,9 @@ class PipeWireFrameSource : public FrameSource {
 
   std::uint64_t frames_captured() const { return frames_captured_; }
   std::uint64_t frames_repeated() const { return frames_repeated_; }
+  std::uint64_t pipewire_frames_captured() const override {
+    return frames_captured_;
+  }
 
  private:
   struct Impl;

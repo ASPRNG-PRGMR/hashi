@@ -159,6 +159,24 @@ def reference() -> dict[str, str]:
     # --- Capture pipeline -------------------------------------------------
     out["pipeline_default"] = host.capture_pipeline_description(42)
     out["pipeline_custom"] = host.capture_pipeline_description(0, 640, 480, 60)
+
+    # --- Frame pacing -----------------------------------------------------
+    # A scripted clock on both sides, so the schedule arithmetic is what is
+    # compared rather than wall-clock behaviour.
+    script = [0.0, 0.010, 0.033, 0.040, 1.0, 1.0, 1.033, 1.040]
+    for fps in (30, 60):
+        ticks = iter(script)
+        last = [script[-1]]
+
+        def clock(ticks=ticks, last=last):
+            try:
+                return next(ticks)
+            except StopIteration:
+                return last[0]
+
+        pacer = host.Pacer(fps, now=clock)
+        out[f"pacer_schedule_{fps}"] = ",".join(
+            f"{pacer.sleep_s():.6f}" for _ in script)
     return out
 
 

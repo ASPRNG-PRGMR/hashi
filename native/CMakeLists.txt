@@ -66,6 +66,13 @@ target_link_libraries(hashi_encode PUBLIC hashi_protocol
 target_compile_options(hashi_encode PRIVATE
   -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 
+# --- The composed host ------------------------------------------------------
+# Transport, pacing and the loop. The only socket I/O in the native tree.
+add_library(hashi_host STATIC src/host.cpp)
+target_link_libraries(hashi_host PUBLIC hashi_capture hashi_session)
+target_compile_options(hashi_host PRIVATE
+  -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+
 enable_testing()
 add_executable(test_protocol tests/test_protocol.cpp)
 target_link_libraries(test_protocol PRIVATE hashi_protocol)
@@ -85,11 +92,26 @@ add_test(NAME encode COMMAND test_encode)
 
 # Emits the core's wire bytes for native/tools/conformance.py to diff against
 # the Python reference implementation.
-# Links hashi_capture for the pipeline description, which is a plain string.
-# That is a tool linking a library, not a dependency of the core: hashi_protocol
-# itself still links nothing but the standard library.
+# Links hashi_host for the pipeline description and the pacer, which are a
+# plain string and plain arithmetic. That is a tool linking a library, not a
+# dependency of the core: hashi_protocol itself still links nothing but the
+# standard library.
 add_executable(dump_vectors tools/dump_vectors.cpp)
-target_link_libraries(dump_vectors PRIVATE hashi_protocol hashi_capture)
+target_link_libraries(dump_vectors PRIVATE hashi_protocol hashi_host)
+
+# The host binary. `plan` and `devices` are inert; `run` needs --allow-session.
+add_executable(hashi tools/hashi.cpp)
+target_link_libraries(hashi PRIVATE hashi_host)
+target_compile_options(hashi PRIVATE -Wall -Wextra)
+
+# The host layer's tests: pacing, the frame gate, and the socket over a
+# socketpair. No device and no compositor.
+add_executable(test_host tests/test_host.cpp)
+target_link_libraries(test_host PRIVATE hashi_host)
+target_include_directories(test_host PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+target_compile_options(test_host PRIVATE -Wall -Wextra)
+add_test(NAME host COMMAND test_host)
 
 # The capture layer's compositor-free tests.
 add_executable(test_capture tests/test_capture.cpp)

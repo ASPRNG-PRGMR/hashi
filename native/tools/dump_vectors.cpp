@@ -7,8 +7,10 @@
 // drove the device in FED-LIVE-E001 and FED-HOST-E001.
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #include "hashi/capture.hpp"
+#include "hashi/host.hpp"
 #include "hashi/gnome.hpp"
 #include "hashi/jpeg.hpp"
 #include "hashi/startup.hpp"
@@ -165,6 +167,29 @@ int main() {
               capture::pipeline_description(42).c_str());
   std::printf("pipeline_custom %s\n",
               capture::pipeline_description(0, 640, 480, 60).c_str());
+
+  // --- Frame pacing -----------------------------------------------------
+  // Driven by a scripted clock on both sides, so the schedule arithmetic is
+  // compared rather than wall-clock behaviour. The reference's Pacer takes an
+  // injectable clock for the same reason.
+  {
+    const std::vector<double> script{0.0,  0.010, 0.033, 0.040,
+                                     1.0,  1.0,   1.033, 1.040};
+    for (int fps : {30, 60}) {
+      std::size_t index = 0;
+      host::Pacer pacer(fps, [&script, &index]() {
+        return index < script.size() ? script[index++] : script.back();
+      });
+      std::string text;
+      for (std::size_t i = 0; i < script.size(); ++i) {
+        char buffer[32];
+        std::snprintf(buffer, sizeof buffer, "%.6f", pacer.sleep_s());
+        if (i != 0) text += ",";
+        text += buffer;
+      }
+      std::printf("pacer_schedule_%d %s\n", fps, text.c_str());
+    }
+  }
 
   // --- usbmux header framing -------------------------------------------
   // The plist body itself is not compared: usbmuxd parses XML, and the two
