@@ -406,12 +406,46 @@ class TestSessionIsInert(unittest.TestCase):
         with self.assertRaises(g.GnomeError):
             g.VirtualDisplaySession().inject(10, 0, 0)
 
+    def test_inject_refuses_while_the_stream_has_no_consumer(self):
+        # Measured 2026-11-08 with Mutter's idle timer: 40 motion calls with
+        # no consumer left idle climbing 14,741 -> 15,605 ms; the same burst
+        # with a consumer took it 20,683 -> 21 ms. Both return success, so
+        # the only safe move is to refuse rather than no-op silently.
+        session = g.VirtualDisplaySession()
+        session._remote_desktop_session = object()
+        session.stream_path = "/stream/0"
+        session.stream_consumed = False
+        with self.assertRaises(g.GnomeError) as caught:
+            session.inject(10, 100, 100)
+        self.assertIn("consuming", str(caught.exception))
+
+    def test_stream_consumed_defaults_false(self):
+        self.assertFalse(g.VirtualDisplaySession().stream_consumed)
+
     def test_stream_parameters_without_a_session_is_an_error(self):
         with self.assertRaises(g.GnomeError):
             g.VirtualDisplaySession().stream_parameters()
 
     def test_close_without_a_session_is_harmless(self):
-        self.assertIsNone(g.VirtualDisplaySession().close())
+        # Returns the teardown errors it swallowed — none, with no session.
+        self.assertEqual(g.VirtualDisplaySession().close(), [])
+
+    def test_close_clears_state_and_never_raises(self):
+        # Teardown must not mask the failure that caused it: stopping a
+        # session that was never started raises "Session not started", which
+        # would otherwise replace the real error from open().
+        class Exploding:
+            def call_sync(self, *_a, **_k):
+                raise RuntimeError("Session not started (0)")
+
+        session = g.VirtualDisplaySession()
+        session._remote_desktop_session = Exploding()
+        session.stream_path = "/stream/0"
+        errors = session.close()
+        self.assertEqual(len(errors), 1)
+        self.assertIn("Session not started", errors[0])
+        self.assertIsNone(session.stream_path)
+        self.assertIsNone(session._remote_desktop_session)
 
 
 if __name__ == "__main__":

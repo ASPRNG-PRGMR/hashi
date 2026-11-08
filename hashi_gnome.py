@@ -458,9 +458,28 @@ class VirtualDisplaySession:
         self._bus = None
         self._remote_desktop_session = None
         self._screen_cast_session = None
+        self._started = False
         self.session_id: str | None = None
         self.stream_path: str | None = None
         self.node_id: int | None = None
+        #: Whether something is actually consuming the PipeWire stream.
+        #:
+        #: **Fact, measured 2026-11-08.** Absolute motion is silently dropped
+        #: until the stream has a consumer. With Mutter's idle timer as the
+        #: probe: 40 motion calls with no consumer left idle climbing
+        #: 14,741 -> 15,605 ms, and the same burst with a consumer attached
+        #: took it 20,683 -> 21 ms. The D-Bus calls return success either way,
+        #: so nothing in the reply distinguishes the two.
+        #:
+        #: The cause is in ``meta_stream_virtual_transform_position``: it
+        #: returns FALSE unless ``meta_stream_source_is_enabled`` and the
+        #: source has a ``ClutterStageView``, and the caller then logs
+        #: "Dropping early absolute pointer motion" and completes the call.
+        #: ``NotifyPointerButton`` takes no stream and no transform, so it
+        #: lands regardless — which is why a host in this state produces
+        #: clicks at a stale pointer position: selected text and windows
+        #: behaving oddly, with a pointer that never moves.
+        self.stream_consumed = False
 
     # -- helpers ----------------------------------------------------------
 
@@ -538,13 +557,16 @@ class VirtualDisplaySession:
         self.session_id = str(session_id.unpack())
 
         # 2. screen cast session bound to it
+        # GLib.Variant("(a{sv})", (prebuilt,)) does NOT work: PyGObject's
+        # format-string creator tries to iterate the already-built a{sv}
+        # variant as a Python dict and raises KeyError. new_tuple wraps it
+        # properly.
         sc_path = screen_cast.call_sync(
             "CreateSession",
-            GLib.Variant(
-                "(a{sv})",
-                (to_glib_variant_dict(
+            GLib.Variant.new_tuple(
+                to_glib_variant_dict(
                     screen_cast_session_properties(self.session_id)
-                ),),
+                )
             ),
             0,
             -1,
@@ -566,7 +588,7 @@ class VirtualDisplaySession:
         )
         self.stream_path = self._screen_cast_session.call_sync(
             "RecordVirtual",
-            GLib.Variant("(a{sv})", (to_glib_variant_dict(properties),)),
+            GLib.Variant.new_tuple(to_glib_variant_dict(properties)),
             0,
             -1,
             None,
@@ -588,6 +610,7 @@ class VirtualDisplaySession:
         # 5. starting the remote desktop session starts the cast with it
         try:
             self._remote_desktop_session.call_sync("Start", None, 0, -1, None)
+            self._started = True
             if self.node_id is None:
                 GLib.timeout_add_seconds(10, loop.quit)
                 loop.run()
@@ -602,11 +625,20 @@ class VirtualDisplaySession:
         return self.node_id
 
     def stream_parameters(self) -> dict[str, object]:
-        """Read back the stream's ``position`` and ``size``.
+        """Read the stream's ``Parameters`` dictionary.
 
-        Worth asserting against: it is the compositor's own statement of what
-        the pinned mode produced, and a ``size`` other than the requested one
-        means every emitted frame would mismatch the JPEG prelude.
+        **Do not expect ``size`` or ``position`` here — a virtual stream has
+        neither.** Observed 2026-11-08: the only key present is ``mapping-id``.
+        ``set_stream_parameters`` in ``meta-screen-cast-stream.c`` has branches
+        for monitor, area and window streams and **none for virtual**, and it
+        runs once in ``initable_init``, before the virtual monitor exists — so
+        it could not report a size even if it tried. ``mapping-id`` appears
+        only because a remote-desktop session is attached.
+
+        This corrects the FED-DBUS-E001 write-up, which suggested asserting the
+        pinned geometry here. Assert it on the **negotiated PipeWire caps**
+        instead: the capture pipeline pins width and height, so a stream of any
+        other size fails negotiation rather than producing wrong-sized frames.
         """
         if self.stream_path is None:
             raise GnomeError("no stream; call open() first")
@@ -627,6 +659,16 @@ class VirtualDisplaySession:
         """
         if self._remote_desktop_session is None or self.stream_path is None:
             raise GnomeError("no session; call open() first")
+        if not self.stream_consumed:
+            raise GnomeError(
+                "refusing to inject: nothing is consuming the PipeWire stream "
+                "yet, so Mutter would silently drop every absolute motion "
+                "while still reporting success. Buttons would still land, at "
+                "a stale pointer position — which looks like selected text "
+                "and misbehaving windows rather than an error. Start the "
+                "capture and pull at least one frame, then set "
+                "stream_consumed."
+            )
 
         from gi.repository import GLib  # noqa: PLC0415
 
@@ -650,16 +692,42 @@ class VirtualDisplaySession:
             )
         return calls
 
-    def close(self) -> None:
-        """Stop the remote desktop session, which stops the cast with it."""
+    def close(self) -> list[str]:
+        """Stop the session and release the virtual monitor.
+
+        Returns the teardown errors it swallowed, if any.
+
+        **Teardown must never mask the failure that caused it.** Stopping a
+        session that was never started raises "Session not started", so an
+        early failure in :meth:`open` would otherwise surface as that instead
+        of its real cause. Each Stop is attempted and its error recorded, and
+        the state is cleared either way so a dangling virtual monitor cannot
+        survive a partially opened session.
+        """
+        errors: list[str] = []
+        # Stopping the remote desktop session stops the cast with it and
+        # destroys the screen cast session object, so only fall back to
+        # stopping the cast directly if the remote desktop stop did not
+        # happen or failed. Observed: stopping both in sequence makes the
+        # second call fail with "Object does not exist at path ...".
+        stopped = False
         if self._remote_desktop_session is not None:
             try:
                 self._remote_desktop_session.call_sync("Stop", None, 0, -1, None)
-            finally:
-                self._remote_desktop_session = None
-                self._screen_cast_session = None
-                self.stream_path = None
-                self.node_id = None
+                stopped = True
+            except Exception as exc:  # noqa: BLE001 - teardown is best effort
+                errors.append(f"{type(exc).__name__}: {exc}")
+        if not stopped and self._screen_cast_session is not None:
+            try:
+                self._screen_cast_session.call_sync("Stop", None, 0, -1, None)
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{type(exc).__name__}: {exc}")
+        self._remote_desktop_session = None
+        self._screen_cast_session = None
+        self._started = False
+        self.stream_path = None
+        self.node_id = None
+        return errors
 
     def __enter__(self) -> VirtualDisplaySession:
         self.open()

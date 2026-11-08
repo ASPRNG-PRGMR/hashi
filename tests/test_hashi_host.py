@@ -49,8 +49,11 @@ class FakeSocket:
 class FakeDisplay:
     """Stands in for VirtualDisplaySession, recording the planned calls."""
 
-    def __init__(self, stream_path="/stream/0"):
+    def __init__(self, stream_path="/stream/0", stream_consumed=True):
         self.stream_path = stream_path
+        # Real injection is a silent no-op for motion until the PipeWire
+        # stream has a consumer, so the session guards on this.
+        self.stream_consumed = stream_consumed
         self.calls = []
 
     def inject(self, field0, x, y):
@@ -396,6 +399,38 @@ class TestSessionLoop(unittest.TestCase):
         self.assertEqual(session.display.calls, [])
         self.assertEqual(session.stats.records_ignored, 1)
 
+    def test_injection_is_withheld_until_the_stream_has_a_consumer(self):
+        # Measured 2026-11-08: with no consumer, Mutter drops absolute motion
+        # and still returns success, while buttons land at a stale pointer
+        # position. Injecting anyway produces selected text and odd window
+        # behaviour with a motionless pointer, so the host withholds instead.
+        session = host.HostSession(
+            source=host.ReplayFrameSource([b"x"]),
+            display=FakeDisplay(stream_consumed=False),
+        )
+        session._socket = FakeSocket(tlv7(5, 100, 100))
+        session.run(frames=1)
+        self.assertEqual(session.stats.records_received, 1)
+        self.assertEqual(session.stats.events_injected, 0)
+        self.assertEqual(session.stats.records_dropped_no_consumer, 1)
+        self.assertEqual(session.display.calls, [])
+
+    def test_a_captured_frame_proves_a_consumer_and_enables_injection(self):
+        class FakePipeWire(host.PipeWireFrameSource):
+            def __init__(self):
+                super().__init__(1)
+                self.frames_captured = 1
+
+            def next_payload(self):
+                return b"\xff\xd8x\xff\xd9"
+
+        display = FakeDisplay(stream_consumed=False)
+        session = host.HostSession(source=FakePipeWire(), display=display)
+        session._socket = FakeSocket(tlv7(10, 50, 60))
+        session.run(frames=1)
+        self.assertTrue(display.stream_consumed)
+        self.assertEqual(session.stats.events_injected, 1)
+
     def test_running_without_a_connection_is_an_error(self):
         session = host.HostSession(source=host.ReplayFrameSource([b"x"]))
         with self.assertRaises(host.HostError):
@@ -423,10 +458,12 @@ class TestSessionIsInert(unittest.TestCase):
         self.assertFalse(session.diff_jpeg)
         self.assertEqual(session.stats.frames_sent, 0)
 
-    def test_defaults_match_the_observed_device(self):
+    def test_the_device_id_is_discovered_not_assumed(self):
+        # usbmuxd reassigns DeviceID on every attach, so hard-coding it works
+        # for one session and fails with BADDEV on the next. Met live.
         session = host.HostSession()
-        # usbmux DeviceID 1, 30 fps.
-        self.assertEqual(session.device_id, 1)
+        self.assertIsNone(session.device_id)
+        self.assertEqual(session.devices_seen, [])
         self.assertEqual(session.fps, host.TARGET_FPS)
 
     def test_target_geometry_agrees_with_the_gnome_layer(self):

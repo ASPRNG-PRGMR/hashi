@@ -3,6 +3,8 @@
 import socket
 import unittest
 
+import hashi_usbmux
+
 from hashi_usbmux import (
     APPLICATION_PORT,
     LINUX_USBMUXD_SOCKET,
@@ -146,3 +148,67 @@ class SafetyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDeviceDiscovery(unittest.TestCase):
+    """usbmuxd reassigns DeviceID on every attach, so it must be discovered."""
+
+    LISTING = {
+        "DeviceList": [
+            {
+                "DeviceID": 7,
+                "Properties": {
+                    "SerialNumber": "abc123",
+                    "ProductID": 0x12AB,
+                    "ConnectionType": "USB",
+                },
+            }
+        ]
+    }
+
+    def test_parse_device_list_flattens_properties(self):
+        devices = hashi_usbmux.parse_device_list(self.LISTING)
+        self.assertEqual(len(devices), 1)
+        self.assertEqual(devices[0]["device_id"], 7)
+        self.assertEqual(devices[0]["product_id"], 0x12AB)
+        self.assertEqual(devices[0]["connection_type"], "USB")
+
+    def test_empty_list_parses_to_nothing(self):
+        # Observed live: the iPad enumerated on USB while usbmuxd reported an
+        # empty DeviceList.
+        self.assertEqual(hashi_usbmux.parse_device_list({"DeviceList": []}), [])
+
+    def test_select_device_returns_the_id(self):
+        devices = hashi_usbmux.parse_device_list(self.LISTING)
+        self.assertEqual(hashi_usbmux.select_device(devices), 7)
+
+    def test_select_device_prefers_the_ipad_product_id(self):
+        devices = [
+            {"device_id": 3, "product_id": 0x1234, "connection_type": "USB"},
+            {"device_id": 9, "product_id": 0x12AB, "connection_type": "USB"},
+        ]
+        self.assertEqual(
+            hashi_usbmux.select_device(devices, product_id=0x12AB), 9
+        )
+
+    def test_select_device_prefers_usb_over_network(self):
+        devices = [
+            {"device_id": 4, "product_id": 0x12AB, "connection_type": "Network"},
+            {"device_id": 5, "product_id": 0x12AB, "connection_type": "USB"},
+        ]
+        self.assertEqual(hashi_usbmux.select_device(devices), 5)
+
+    def test_no_devices_raises_with_an_actionable_message(self):
+        with self.assertRaises(hashi_usbmux.UsbmuxError) as caught:
+            hashi_usbmux.select_device([])
+        self.assertIn("unlock", str(caught.exception).lower())
+
+    def test_result_names_cover_the_codes_met_live(self):
+        self.assertEqual(hashi_usbmux.result_name(
+            {"MessageType": "Result", "Number": 0}), "OK")
+        self.assertEqual(hashi_usbmux.result_name(
+            {"MessageType": "Result", "Number": 2}), "BADDEV")
+        self.assertEqual(hashi_usbmux.result_name(
+            {"MessageType": "Result", "Number": 3}), "CONNREFUSED")
+        self.assertIn("UNKNOWN", hashi_usbmux.result_name(
+            {"MessageType": "Result", "Number": 99}))

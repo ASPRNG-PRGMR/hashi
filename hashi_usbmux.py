@@ -178,3 +178,83 @@ def parse_result(payload: dict) -> int:
 def result_is_success(payload: dict) -> bool:
     """Whether a ``Result`` reply reports success, i.e. ``Number == 0``."""
     return parse_result(payload) == 0
+
+
+#: usbmuxd's own ``Number`` codes, so a failure can be reported as something
+#: better than an integer. Only 0 was ever observed in the captures; the rest
+#: are usbmuxd's published result enum, and 2 was met live on 2026-11-08 when
+#: the daemon had dropped the device.
+#: The iPad's USB product id, ``05ac:12ab`` (FED-LIVE-E001, and unchanged on
+#: 2026-11-08). Used only to prefer the right device when several are attached.
+IPAD_PRODUCT_ID = 0x12AB
+
+RESULT_NAMES = {
+    0: "OK",
+    1: "BADCOMMAND",
+    2: "BADDEV",
+    3: "CONNREFUSED",
+    6: "BADVERSION",
+}
+
+
+def result_name(payload: dict) -> str:
+    """A readable name for a ``Result`` reply's ``Number``."""
+    number = parse_result(payload)
+    return RESULT_NAMES.get(number, f"UNKNOWN({number})")
+
+
+def parse_device_list(payload: dict) -> list[dict]:
+    """Return the ``DeviceList`` of a ``ListDevices`` reply.
+
+    Each entry is flattened to ``{"device_id", "serial", "product_id",
+    "connection_type"}``. An empty list means usbmuxd currently knows of no
+    device — which is **not** the same as no device being plugged in: on
+    2026-11-08 the iPad was enumerated on USB (``05ac:12ab``) while usbmuxd
+    reported an empty list, after an earlier session had used it successfully.
+    """
+    devices = payload.get("DeviceList", [])
+    if not isinstance(devices, list):
+        raise UsbmuxError(f"DeviceList is not a list: {devices!r}")
+    out = []
+    for entry in devices:
+        properties = entry.get("Properties", {}) if isinstance(entry, dict) else {}
+        out.append(
+            {
+                "device_id": entry.get("DeviceID"),
+                "serial": properties.get("SerialNumber"),
+                "product_id": properties.get("ProductID"),
+                "connection_type": properties.get("ConnectionType"),
+            }
+        )
+    return out
+
+
+def select_device(devices: list[dict], *, product_id: int | None = None) -> int:
+    """Pick the device id to connect to.
+
+    **Why this exists.** The 2026-11-08 run hard-coded ``DeviceID = 1``, which
+    was right for one session and wrong for the next: usbmuxd assigns a fresh
+    id every time a device attaches, so a reconnect gets a different one and
+    ``Connect`` fails with ``BADDEV``. A host must discover the id, never
+    assume it.
+
+    Prefers USB over network attachments, since HASHI is a wired display.
+    """
+    if not devices:
+        raise UsbmuxError(
+            "usbmuxd reports no devices. The iPad can be enumerated on USB and "
+            "still be absent here — unlock it, make sure it trusts this host, "
+            "and reopen the app; replugging the cable re-attaches it."
+        )
+    candidates = devices
+    if product_id is not None:
+        matching = [d for d in candidates if d.get("product_id") == product_id]
+        if matching:
+            candidates = matching
+    usb = [d for d in candidates if d.get("connection_type") == "USB"]
+    if usb:
+        candidates = usb
+    device_id = candidates[0].get("device_id")
+    if not isinstance(device_id, int):
+        raise UsbmuxError(f"device has no integer DeviceID: {candidates[0]!r}")
+    return device_id

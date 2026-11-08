@@ -222,12 +222,22 @@ class PipeWireFrameSource(FrameSource):
         height: int = TARGET_HEIGHT,
         fps: int = TARGET_FPS,
         timeout_s: float = 5.0,
+        poll_timeout_s: float | None = None,
     ) -> None:
         self.node_id = node_id
         self.width = width
         self.height = height
         self.fps = fps
+        #: How long to wait for the *first* frame, i.e. for the stream to start.
         self.timeout_s = timeout_s
+        #: How long to wait for each later frame before repeating the last one.
+        #: Defaults to one frame interval, so a static screen paces normally.
+        self.poll_timeout_s = (
+            poll_timeout_s if poll_timeout_s is not None else 1.0 / max(fps, 1)
+        )
+        self.frames_captured = 0
+        self.frames_repeated = 0
+        self._last_payload: bytes | None = None
         self._pipeline = None
         self._sink = None
 
@@ -235,7 +245,11 @@ class PipeWireFrameSource(FrameSource):
         import gi  # noqa: PLC0415
 
         gi.require_version("Gst", "1.0")
-        from gi.repository import Gst  # noqa: PLC0415
+        gi.require_version("GstApp", "1.0")
+        # GstApp must be imported even though it is not referenced: appsink's
+        # pull methods live in that namespace, and without it the element is a
+        # bare GstAppSink with no try_pull_sample.
+        from gi.repository import Gst, GstApp  # noqa: PLC0415, F401
 
         if not Gst.is_initialized():
             Gst.init(None)
@@ -259,11 +273,27 @@ class PipeWireFrameSource(FrameSource):
         if self._sink is None:
             raise HostError("capture not started; call start() first")
 
-        sample = self._sink.try_pull_sample(int(self.timeout_s * Gst.SECOND))
+        # **Observed 2026-11-08:** the stream negotiates
+        # ``framerate=(fraction)0/1`` with ``max-framerate=30/1``, i.e. variable
+        # rate — Mutter produces a buffer only when the screen is *damaged*. An
+        # idle desktop therefore yields no buffers at all, which is correct for
+        # a screen cast and wrong for a display: the iPad still needs frames.
+        #
+        # So a timeout after the stream is running is not an error; it means
+        # "nothing changed", and the right answer is to re-send the last frame.
+        # Only never having received a frame is a genuine failure.
+        first = self._last_payload is None
+        timeout = self.timeout_s if first else self.poll_timeout_s
+        sample = self._sink.try_pull_sample(int(timeout * Gst.SECOND))
         if sample is None:
-            raise HostError(
-                f"no frame within {self.timeout_s}s; the stream stalled or ended"
-            )
+            if first:
+                raise HostError(
+                    f"no first frame within {self.timeout_s}s; the stream never "
+                    "started. Check that the PipeWire node still exists and "
+                    "that the session was started."
+                )
+            self.frames_repeated += 1
+            return self._last_payload
 
         caps = sample.get_caps().get_structure(0)
         width = caps.get_value("width")
@@ -292,7 +322,10 @@ class PipeWireFrameSource(FrameSource):
             image = Image.frombytes("RGB", (width, height), bytes(info.data))
         finally:
             buffer.unmap(info)
-        return jpeg.encode_frame(image)
+        payload = jpeg.encode_frame(image)
+        self._last_payload = payload
+        self.frames_captured += 1
+        return payload
 
     def close(self) -> None:
         if self._pipeline is not None:
@@ -437,6 +470,9 @@ class SessionStats:
     records_received: int = 0
     events_injected: int = 0
     records_ignored: int = 0
+    #: Records discarded because the PipeWire stream had no consumer yet, so
+    #: injecting would have been a silent no-op for motion.
+    records_dropped_no_consumer: int = 0
 
 
 class HostSession:
@@ -459,13 +495,16 @@ class HostSession:
     def __init__(
         self,
         *,
-        device_id: int = 1,
+        device_id: int | None = None,
         fps: int = TARGET_FPS,
         source: FrameSource | None = None,
         display: gnome.VirtualDisplaySession | None = None,
         inject: bool = True,
     ) -> None:
+        #: None means "discover it from usbmuxd", which is what a host should
+        #: do; an explicit id is only for tests and for forcing a device.
         self.device_id = device_id
+        self.devices_seen: list[dict] = []
         self.fps = fps
         self.source = source
         self.display = display
@@ -495,13 +534,42 @@ class HostSession:
 
         self._socket = socket_factory()
 
-        # usbmux Connect to the application port
+        # Discover the device id rather than assume it. usbmuxd assigns a
+        # fresh DeviceID on every attach, so a hard-coded one is right for a
+        # single session and wrong for the next — met live on 2026-11-08 as a
+        # BADDEV failure after a reconnect.
+        if self.device_id is None:
+            self._send(usbmux.build_list_devices())
+            _, listing = usbmux.decode_message(self._recv_usbmux_message())
+            devices = usbmux.parse_device_list(listing)
+            self.device_id = usbmux.select_device(
+                devices, product_id=usbmux.IPAD_PRODUCT_ID
+            )
+            self.devices_seen = devices
+            # ListDevices is answered on its own connection; Connect needs a
+            # fresh one, since a successful Connect turns the socket into the
+            # device's byte stream.
+            self._socket.close()
+            self._socket = socket_factory()
+
         self._send(usbmux.build_connect(self.device_id))
         _, reply = usbmux.decode_message(self._recv_usbmux_message())
         if not usbmux.result_is_success(reply):
+            name = usbmux.result_name(reply)
+            hint = {
+                "BADDEV": (
+                    "usbmuxd does not know this device id. It is reassigned on "
+                    "every attach, so this usually means the device detached "
+                    "and came back."
+                ),
+                "CONNREFUSED": (
+                    "nothing is listening on the application port — the "
+                    "Splashtop app is not running or not in the foreground."
+                ),
+            }.get(name, "")
             raise HostError(
-                f"usbmux Connect failed: {reply!r}. The Splashtop app must be "
-                "running and in the foreground on the iPad."
+                f"usbmux Connect to device {self.device_id} failed: {name} "
+                f"(Number={usbmux.parse_result(reply)}). {hint}"
             )
 
         # byte-order probe, then HELLO / READY / extra-data request
@@ -581,6 +649,20 @@ class HostSession:
         if not self.inject or self.display is None:
             self.stats.records_ignored += 1
             return
+
+        # Absolute motion is dropped until the PipeWire stream has a consumer,
+        # and Mutter reports success anyway, so this cannot be detected from
+        # the D-Bus reply. Capturing a frame proves a consumer exists.
+        if not getattr(self.display, "stream_consumed", False):
+            if (
+                isinstance(self.source, PipeWireFrameSource)
+                and self.source.frames_captured > 0
+            ):
+                self.display.stream_consumed = True
+            else:
+                self.stats.records_dropped_no_consumer += 1
+                return
+
         calls = self.display.inject(record.field0, record.field1, record.field2)
         if calls:
             self.stats.events_injected += 1
