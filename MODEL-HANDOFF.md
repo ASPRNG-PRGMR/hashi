@@ -101,13 +101,20 @@ rather than writing into an existing one.
 
 `hashi_framing.py` is the validated record-boundary and JPEG-header parser;
 `hashi_startup.py` the handshake codec and capability gate; `hashi_stream.py` the
-steady-state codec, input mapping and event dispatch; `hashi_mode.py` holds the
+steady-state codec, input mapping and event dispatch; `hashi_gnome.py` the verified Mutter virtual-monitor and input-injection layer (FED-DBUS-E001, never executed); `hashi_mode.py` holds the
 FED-MODE-E001 dimension rules, with the reconstructed
 `FindBestResolution` scorer clearly marked **Inference** and deliberately not
-wired into anything. Tests live in `tests/` and are run with
-`python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode
-tests.test_hashi_startup tests.test_hashi_stream` (135 tests,
-passing). Reuse these rather than rewriting them.
+wired into anything. `hashi_jpeg.py` holds the frame prelude and the encoder, and
+`hashi_usbmux.py` the transport. Tests live in `tests/`, which has no
+`__init__.py`, so bare `unittest discover` fails; run them with
+
+```sh
+python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
+  tests.test_hashi_startup tests.test_hashi_stream tests.test_hashi_jpeg \
+  tests.test_hashi_usbmux tests.test_hashi_gnome
+```
+
+197 tests, passing. Reuse these rather than rewriting them.
 
 ## What FED-START-E001 settled
 
@@ -208,18 +215,67 @@ are validated. Frame *generation* is not.
 keyboard (`field0` 1/2), `field0` 16/17, reconfiguration, the TLV `0x70` subtype,
 and differential JPEG.
 
+## FED-DBUS-E001: the Mutter contracts are verified and the GNOME layer is built
+
+**Fact.** Every `ScreenCast` and `RemoteDesktop` signature is verified against
+the installed `mutter-51.1-1.fc45` build, three ways: live introspection of the
+two top-level interfaces, the `GDBusMethodInfo`/`SignalInfo`/`PropertyInfo`
+tables recovered from `libmutter-51.so.0`, and the Fedora source RPM, which
+applies **no patches** and so matches the running binary. This closes the
+caveat that only the method *names* were known. **No session was created.**
+See `docs/fedora-mutter-dbus-contracts.md`; private run
+`fedora-dbus-20261108T042538Z`, index SHA-256
+`57d954b908f06dbeb04fac047c7ddd6cf0a97ad06091190fbdac65dd147b8c84`.
+
+**Fact — the sizing question is settled in HASHI's favour.** `RecordVirtual`
+accepts a `modes` (`aa{sv}`) key: "If set, the PipeWire stream becomes
+non-resizable, and size is controlled by the compositor as if it was a regular
+monitor." Each mode takes `size` (`(uu)`, required), `refresh-rate` (`d`) and
+`is-preferred` (`b`), exactly one preferred. So **1280×960 can be pinned** rather
+than negotiated. This *corrects a hypothesis*: negotiating the size through the
+PipeWire format is real, but it is the fallback path taken only when `modes` is
+absent.
+
+**Fact — `NotifyPointerButton`'s `button` is an evdev code**
+(`meta_evdev_button_to_clutter`), so `BTN_LEFT` = 272, not a `MOUSEEVENTF_*`
+flag and not a Clutter button number. The XML does not say this; the
+implementation does. `NotifyKeyboardKeycode` is likewise an evdev keycode.
+
+**Fact — the coordinate simplification is confirmed**, now from the
+implementation rather than the method name. For a virtual stream the whole
+transform is `*x = stream_x + view_layout.x` (same for y): a pure translation by
+the monitor's stage position, no scaling, no normalisation. The iPad's
+monitor-relative pixels go straight in as doubles. **Do not reimplement the
+Windows 65535 virtual-desktop transform; it has no Linux counterpart.**
+
+**The operational trap:** `transform_position` returns FALSE until the stream
+has a `ClutterStageView`, and the caller then logs "Dropping early absolute
+pointer motion" and **completes the call successfully**. A successful D-Bus
+return is therefore not proof that an event was delivered.
+
+**Fact:** `hashi_gnome.py` implements this — the properties builders, the
+`field0` → evdev/absolute-motion injection plan, and a `VirtualDisplaySession`
+that is **inert on import and has never been executed**. 57 tests, 197 in all.
+`pipewiresrc` is present and instantiable (it ships in `pipewire`, not
+`gstreamer1-plugin-pipewire`, which is not installed and not needed), so
+`pipewire-devel`'s absence does not block capture.
+
+**Pinned to a GNOME version range.** These are Mutter's private APIs; the XML
+states "no compatibility between versions are promised". The verification holds
+for 51.1 only, and `check_versions` refuses anything else.
+
 ## Next task, in order — there is no pending Windows work
 
-1. **The JPEG entropy coder** — forward DCT, quantization against the Annex K
-   tables at quality 80, and Huffman coding in 4:2:0. The only missing piece of
-   outbound frame generation, and it has no protocol unknowns left in it.
-2. **The Mutter virtual monitor and PipeWire capture**, so frames come from a
-   real extended display instead of a replay. Verify the `RecordVirtual` and
-   `Notify*` parameter contracts against Mutter 51 first; only the method names
-   are confirmed.
-3. **Input injection** mapping `field0` 5/6/10 onto `NotifyPointerButton` and
-   `NotifyPointerMotionAbsolute` — now with observed event values to test
-   against rather than inferred ones.
+1. **Wire it together.** Every piece is now built and individually validated,
+   and none of it has run end to end: virtual monitor → PipeWire capture →
+   `hashi_jpeg.encode_frame` → the validated transport, plus inbound records →
+   injection. Creating a session has user-visible effects (a screen-sharing
+   indicator and a new monitor), so **tell the user before creating one**; and
+   the 2026-11-08 authority to send bytes to the iPad is **spent**, so ask again.
+2. **Assert, don't assume, the captured size.** Check the PipeWire buffer is
+   1280×960 and that `Stream.Parameters` reports `size = (1280, 960)`. The JPEG
+   prelude hard-codes that size, and if the virtual monitor ends up scaled, the
+   logical coordinates injection uses and the buffer's pixels diverge.
 4. **The indirect vtable targets** behind the five `HandleEvent` cases, if the
    `0x70` subtype ever matters.
 2. **`field0` 10's path**, the 16/17 `ProcControlMessage` body that reads

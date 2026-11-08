@@ -8,7 +8,7 @@
 
 **Fact (FED-USBMUX-E001):** the usbmux layer is implemented and validated against the captured control exchange, including the byte-swapped `PortNumber` (6789 → 34074 via `htons`). It performs no I/O. Also corrected: the usbmuxd daemon runs but the libimobiledevice CLI tools are absent.
 
-**Next:** the JPEG entropy coder (DCT, quantize, Huffman in 4:2:0 — no protocol unknowns remain in it); then the Mutter virtual-monitor and PipeWire capture plumbing, and input injection through `RemoteDesktop`. Verify the `RecordVirtual` and `Notify*` parameter contracts against Mutter 51 before depending on them, since only the method names were confirmed. **Nothing has been transmitted to the iPad.**
+**Next (updated 2026-11-08):** the entropy coder is closed (libjpeg-turbo via Pillow is byte-identical to the agent's encoder), and the Mutter contracts are verified as **FED-DBUS-E001** — see [Mutter D-Bus contracts](fedora-mutter-dbus-contracts.md) — with the display and input layer implemented in `hashi_gnome.py`. What remains is **wiring**: virtual monitor → PipeWire capture → `encode_frame` → the validated transport, and inbound records → injection. No D-Bus session has been created, and the 2026-11-08 authorisation for sending to the iPad is spent; both need asking again.
 
 ## Steady state decoded — FED-STREAM-E001, 2026-11-08
 
