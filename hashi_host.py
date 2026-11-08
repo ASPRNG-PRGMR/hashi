@@ -473,6 +473,9 @@ class SessionStats:
     #: Records discarded because the PipeWire stream had no consumer yet, so
     #: injecting would have been a silent no-op for motion.
     records_dropped_no_consumer: int = 0
+    #: Frames not transmitted because they were byte-identical to the last one
+    #: sent and the keepalive was not yet due.
+    frames_skipped: int = 0
 
 
 class HostSession:
@@ -500,6 +503,8 @@ class HostSession:
         source: FrameSource | None = None,
         display: gnome.VirtualDisplaySession | None = None,
         inject: bool = True,
+        skip_unchanged: bool = True,
+        keepalive_interval_s: float = 1.0,
     ) -> None:
         #: None means "discover it from usbmuxd", which is what a host should
         #: do; an explicit id is only for tests and for forcing a device.
@@ -509,6 +514,13 @@ class HostSession:
         self.source = source
         self.display = display
         self.inject = inject
+        #: Do not re-transmit a frame identical to the last one sent.
+        self.skip_unchanged = skip_unchanged
+        #: ...but never go longer than this without sending something, since
+        #: the device's behaviour on a silent stream has never been observed.
+        self.keepalive_interval_s = keepalive_interval_s
+        self._last_sent: bytes | None = None
+        self._last_send_at = 0.0
         self.stats = SessionStats()
         self.client_dimensions: tuple[int, int] | None = None
         self.diff_jpeg: bool = False
@@ -615,15 +627,53 @@ class HostSession:
         sent = 0
         while frames is None or sent < frames:
             payload = self.source.next_payload()
-            record = stream.encode_image_record(payload)
-            self._send(record)
-            self.stats.frames_sent += 1
-            self.stats.bytes_sent += len(record)
+
+            if self._should_send(payload):
+                record = stream.encode_image_record(payload)
+                self._send(record)
+                self._last_sent = payload
+                self._last_send_at = time.monotonic()
+                self.stats.frames_sent += 1
+                self.stats.bytes_sent += len(record)
+            else:
+                self.stats.frames_skipped += 1
             sent += 1
 
             self._drain_inbound(on_record)
             pacer.wait()
         return self.stats
+
+    def _should_send(self, payload: bytes) -> bool:
+        """Whether this frame is worth putting on the wire.
+
+        **Why this exists.** Measured 2026-11-08: a frame is ~372 KB and the
+        encode costs 4.9 ms against a 33 ms budget, so the host is nowhere near
+        CPU-bound — it is bound by ~11 MB/s of USB for frames that are usually
+        identical. A static desktop sent 999 byte-identical copies of one
+        frame in a 38-second run.
+
+        **The keepalive, and why transmission does not simply stop.** What the
+        device does when a stream goes quiet has never been observed — the
+        captured Windows session streamed continuously for its whole life, so
+        there is no evidence either way about a timeout. Rather than guess,
+        an unchanged frame is still re-sent, just at ``keepalive_interval_s``
+        instead of every tick. At the default that is 1 fps instead of 30:
+        roughly a 97% saving with no behaviour the device has not already
+        seen.
+
+        Identity is checked before equality because a repeated frame is
+        normally the very same object — :class:`PipeWireFrameSource` returns
+        its cached payload when nothing was damaged, and
+        :class:`SolidColourSource` caches per colour — which makes the common
+        case O(1) rather than a 372 KB comparison.
+        """
+        if not self.skip_unchanged or self._last_sent is None:
+            return True
+        unchanged = payload is self._last_sent or payload == self._last_sent
+        if not unchanged:
+            return True
+        due = time.monotonic() - self._last_send_at >= self.keepalive_interval_s
+        return due
 
     def _drain_inbound(self, on_record=None) -> None:
         """Read whatever input has arrived without blocking."""

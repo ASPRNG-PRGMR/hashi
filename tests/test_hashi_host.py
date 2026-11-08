@@ -338,7 +338,9 @@ class TestSessionLoop(unittest.TestCase):
         return session
 
     def test_frames_are_sent_as_encoded_records(self):
-        session = self.make_session()
+        # skip_unchanged off: this test is about the framing, and the source
+        # deliberately repeats one payload.
+        session = self.make_session(skip_unchanged=False)
         session.run(frames=3)
         self.assertEqual(session.stats.frames_sent, 3)
         expected = stream.encode_image_record(b"\xff\xd8frame\xff\xd9")
@@ -448,6 +450,74 @@ class TestSessionLoop(unittest.TestCase):
         session.close()
         self.assertTrue(sock.closed)
         self.assertIsNone(session._socket)
+
+
+class TestSkipUnchangedFrames(unittest.TestCase):
+    """Measured: a static desktop sent 999 identical 372 KB copies in 38 s."""
+
+    def make_session(self, payloads, **kw):
+        session = host.HostSession(
+            source=host.ReplayFrameSource(payloads),
+            display=FakeDisplay(),
+            **kw,
+        )
+        session._socket = FakeSocket()
+        return session
+
+    def test_an_identical_frame_is_not_retransmitted(self):
+        session = self.make_session([b"\xff\xd8same\xff\xd9"])
+        session.run(frames=5)
+        self.assertEqual(session.stats.frames_sent, 1)
+        self.assertEqual(session.stats.frames_skipped, 4)
+
+    def test_changing_frames_are_all_sent(self):
+        session = self.make_session([b"a", b"b", b"c"])
+        session.run(frames=3)
+        self.assertEqual(session.stats.frames_sent, 3)
+        self.assertEqual(session.stats.frames_skipped, 0)
+
+    def test_equal_but_distinct_objects_count_as_unchanged(self):
+        # PipeWireFrameSource returns the same object for a repeat, but a
+        # re-encode can produce an equal-but-separate bytes object.
+        session = self.make_session([bytes(b"xy"), bytes(b"xy")])
+        session.run(frames=2)
+        self.assertEqual(session.stats.frames_sent, 1)
+
+    def test_the_keepalive_still_sends_an_unchanged_frame(self):
+        # The device's behaviour on a silent stream has never been observed,
+        # so transmission is slowed, not stopped.
+        session = self.make_session([b"same"], keepalive_interval_s=0.0)
+        session.run(frames=4)
+        self.assertEqual(session.stats.frames_sent, 4)
+        self.assertEqual(session.stats.frames_skipped, 0)
+
+    def test_skipping_can_be_disabled(self):
+        session = self.make_session([b"same"], skip_unchanged=False)
+        session.run(frames=3)
+        self.assertEqual(session.stats.frames_sent, 3)
+
+    def test_bytes_sent_counts_only_what_went_on_the_wire(self):
+        session = self.make_session([b"\xff\xd8same\xff\xd9"])
+        session.run(frames=5)
+        self.assertEqual(session.stats.bytes_sent, len(session._socket.sent))
+
+    def test_input_is_still_drained_while_frames_are_skipped(self):
+        # Skipping a frame must not skip the inbound half of the loop.
+        session = host.HostSession(
+            source=host.ReplayFrameSource([b"same"]), display=FakeDisplay()
+        )
+        session._socket = FakeSocket(tlv7(10, 10, 20) + tlv7(10, 11, 21))
+        session.run(frames=4)
+        self.assertEqual(session.stats.frames_sent, 1)
+        self.assertEqual(session.stats.records_received, 2)
+        self.assertEqual(session.stats.events_injected, 2)
+
+    def test_a_frame_that_returns_to_a_previous_value_is_sent(self):
+        # Only the immediately preceding frame is compared, so A B A sends
+        # all three -- the display must show A again.
+        session = self.make_session([b"A", b"B", b"A"], )
+        session.run(frames=3)
+        self.assertEqual(session.stats.frames_sent, 3)
 
 
 class TestSessionIsInert(unittest.TestCase):
