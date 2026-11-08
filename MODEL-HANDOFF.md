@@ -101,7 +101,7 @@ rather than writing into an existing one.
 
 `hashi_framing.py` is the validated record-boundary and JPEG-header parser;
 `hashi_startup.py` the handshake codec and capability gate; `hashi_stream.py` the
-steady-state codec, input mapping and event dispatch; `hashi_gnome.py` the verified Mutter virtual-monitor and input-injection layer (FED-DBUS-E001, never executed); `hashi_mode.py` holds the
+steady-state codec, input mapping and event dispatch; `hashi_gnome.py` the verified Mutter virtual-monitor and input-injection layer (FED-DBUS-E001, never executed); `hashi_host.py` the composition of all of it (also never executed); `hashi_mode.py` holds the
 FED-MODE-E001 dimension rules, with the reconstructed
 `FindBestResolution` scorer clearly marked **Inference** and deliberately not
 wired into anything. `hashi_jpeg.py` holds the frame prelude and the encoder, and
@@ -111,10 +111,10 @@ wired into anything. `hashi_jpeg.py` holds the frame prelude and the encoder, an
 ```sh
 python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
   tests.test_hashi_startup tests.test_hashi_stream tests.test_hashi_jpeg \
-  tests.test_hashi_usbmux tests.test_hashi_gnome
+  tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host
 ```
 
-197 tests, passing. Reuse these rather than rewriting them.
+249 tests, passing. Reuse these rather than rewriting them.
 
 ## What FED-START-E001 settled
 
@@ -266,12 +266,20 @@ for 51.1 only, and `check_versions` refuses anything else.
 
 ## Next task, in order — there is no pending Windows work
 
-1. **Wire it together.** Every piece is now built and individually validated,
-   and none of it has run end to end: virtual monitor → PipeWire capture →
-   `hashi_jpeg.encode_frame` → the validated transport, plus inbound records →
-   injection. Creating a session has user-visible effects (a screen-sharing
-   indicator and a new monitor), so **tell the user before creating one**; and
-   the 2026-11-08 authority to send bytes to the iPad is **spent**, so ask again.
+1. **Run it.** The wiring is written — `hashi_host.py`, with
+   `docs/fedora-host-wiring.md` — and **never executed**; that report carries
+   no evidence ID for exactly that reason. Do a first run in two stages,
+   because they fail independently: (a) no device — open the virtual monitor,
+   assert `Stream.Parameters` reports `size = (1280, 960)`, capture a few
+   frames and check each is 1280x960 and encodes; (b) with the device — stream
+   `SolidColourSource` first (the byte-exact known-good frames), then live
+   capture, then touch the screen to check injection. Creating a session has
+   user-visible effects (a monitor appears, a sharing indicator shows), so
+   **tell the user before creating one**; and the 2026-11-08 authority to send
+   bytes to the iPad is **spent**, so ask again.
+   Note that injection cannot be verified from D-Bus replies: Mutter drops
+   early motion and returns success anyway, so watching the pointer is the
+   only test.
 2. **Assert, don't assume, the captured size.** Check the PipeWire buffer is
    1280×960 and that `Stream.Parameters` reports `size = (1280, 960)`. The JPEG
    prelude hard-codes that size, and if the virtual monitor ends up scaled, the
