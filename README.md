@@ -42,7 +42,8 @@ Run them with — `tests/` has no `__init__.py`, so bare `unittest discover` fai
 ```sh
 cd python && python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
   tests.test_hashi_startup tests.test_hashi_stream tests.test_hashi_jpeg \
-  tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host
+  tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host \
+  tests.test_hashi_cli
 ```
 
 Or all of it at once, from the repository root — builds what is present, runs
@@ -101,6 +102,10 @@ Why that is worth more than a third test suite: a test asserts what its author b
 **One divergence the port found, and the gap it reveals:** the inbound TLV sanity limit is 4096 in Python and C++; the Rust version was written as `0xFFFFFF` and no vector covers it, because the limit is a *refusal* path rather than a byte on the wire. It is now aligned. Vectors compare what the implementations emit, not what they refuse. See [Rust core](docs/rust-core.md).
 
 **`hashi.sh`** builds whatever is present and runs all three suites plus conformance, defaulting to `check`, which touches no device: `./hashi.sh` to verify, `./hashi.sh plan` to see what a run would do, `./hashi.sh run` for the real thing (the binary still enforces `--allow-session`).
+
+**Fact (2026-11-09): the Python host now has an entry point.** `python/hashi_cli.py` is the startup sequence FED-HOST-E001 used, as a supported command rather than an ad-hoc script kept with the instrumentation — which had in any case stopped working, since it imported the modules from the pre-`94b69e6` layout. It has the same three commands as the native binary, and `./hashi.sh plan|devices|run` now drives *it* rather than the native one, because it is the implementation that has actually worked; the native binary is the same commands under `native-`. **The ordering is the reason the file exists**: capture must be running and a first frame pulled before anything is injected, or Mutter discards every absolute motion while still returning success. 20 tests, including one that asserts that ordering by recording the call sequence.
+
+Using it: plug the iPad in (usbmuxd is udev-activated, so nothing needs starting), open Splashtop Wired XDisplay, then `./hashi.sh run --allow-session`. `--solid` streams solid frames with no virtual monitor and no injection, which separates a transport fault from a capture one.
 
 **Remaining:** a first live run of the native host; optionally switching `plist.cpp` to the now-installed `libplist` 2.7.0, which is a judgement call rather than a fix; whether to extend the Rust core with FFI to libjpeg-turbo or a D-Bus crate, which is a real trade-off since each costs the independence that makes its agreement meaningful; and the unexercised paths. Multi-touch, keyboard, `field0` 16/17, reconfiguration, the TLV `0x70` subtype and differential JPEG remain unexercised **in both implementations** — `field0` 3, 4, 7, 8, 9 and 11–17 have never been seen on the wire, only 5, 6 and 10.
 

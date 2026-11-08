@@ -17,6 +17,14 @@
 #   ./hashi.sh devices         # ask the local usbmuxd what is attached
 #   ./hashi.sh run [args...]   # the real thing; needs --allow-session
 #   ./hashi.sh clean           # remove both build trees
+#
+# plan, devices and run drive the PYTHON host, because that is the
+# implementation that has actually worked (FED-HOST-E001). The native binary
+# is the same three commands with a `native-` prefix; it has never been run.
+#
+#   ./hashi.sh native-plan
+#   ./hashi.sh native-devices
+#   ./hashi.sh native-run [args...]
 
 set -o errexit
 set -o nounset
@@ -67,10 +75,13 @@ build_rust() {
 
 test_python() {
     step "Python reference suite"
+    # Named explicitly: python/tests has no __init__.py, so plain discovery
+    # finds nothing.
     ( cd "${ROOT}/python" && python3 -m unittest \
         tests.test_hashi_framing tests.test_hashi_mode tests.test_hashi_startup \
         tests.test_hashi_stream tests.test_hashi_jpeg tests.test_hashi_usbmux \
-        tests.test_hashi_gnome tests.test_hashi_host 2>&1 | tail -3 )
+        tests.test_hashi_gnome tests.test_hashi_host tests.test_hashi_cli \
+        2>&1 | tail -3 )
 }
 
 test_native() {
@@ -100,6 +111,14 @@ run_conformance() {
 
 require_binary() {
     [[ -x "${HASHI_BIN}" ]] || fail "${HASHI_BIN} is missing; run './hashi.sh build' first"
+}
+
+# The Python host needs its own directory on sys.path, since the modules import
+# each other by bare name.
+python_host() {
+    local command="$1"
+    shift
+    ( cd "${ROOT}/python" && exec python3 hashi_cli.py "${command}" "$@" )
 }
 
 # --- targets ----------------------------------------------------------------
@@ -141,13 +160,24 @@ main() {
         test)         target_test ;;
         conformance)  run_conformance ;;
         clean)        target_clean ;;
-        plan|devices) require_binary; exec "${HASHI_BIN}" "${target}" "$@" ;;
+        plan|devices)
+            python_host "${target}" "$@"
+            ;;
         run)
-            require_binary
-            # The binary enforces --allow-session itself; this only makes the
+            # The CLI enforces --allow-session itself; this only makes the
             # consequences visible before the flag is read.
             note "run sends bytes to the iPad and creates a Mutter session:"
             note "a monitor appears and a screen-sharing indicator shows"
+            python_host run "$@"
+            ;;
+        native-plan|native-devices)
+            require_binary
+            exec "${HASHI_BIN}" "${target#native-}" "$@"
+            ;;
+        native-run)
+            require_binary
+            note "the native host has NEVER been run; treat this as an experiment"
+            note "it sends bytes to the iPad and creates a Mutter session"
             exec "${HASHI_BIN}" run "$@"
             ;;
         -h|--help|help)
