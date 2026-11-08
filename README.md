@@ -45,6 +45,15 @@ cd python && python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode 
   tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host
 ```
 
+The native side, from the repository root:
+
+```sh
+cmake -S native -B native/build && cmake --build native/build -j
+ctest --test-dir native/build       # 5 binaries, 129 tests
+python3 native/tools/conformance.py # 65 vectors, 9 variants, 8 frames
+./native/build/hashi plan           # what a run would do; touches nothing
+```
+
 *(The sentence that stood here — "there is still no Linux host implementation and no validated application protocol beyond the record boundary" — was true when written and is now superseded: the protocol is decoded and live-validated, and the host's layers exist, though they have not been run end to end.)*
 
 **MILESTONE — 2026-11-08 (FED-LIVE-E001): the iPad displayed frames sent from Fedora.** The unmodified Splashtop client completed the decoded handshake first time, rendered a white/black/white pattern from 362 streamed frames (9.6 MB at 30 fps, user-confirmed on screen), and sent back **1,449 input records** while the screen was touched. The handshake's client dimensions and extra-data block came back byte-identical to the Windows capture. Inbound records were all TLV type 7, 16 bytes, coordinates inside the 1280×960 display space — exactly as decoded. `field0` 5 and 6 are pointer down/up as statically predicted, and 10 — the one value static analysis could not classify — is motion. See [live validation](docs/fedora-live-validation.md).
@@ -65,11 +74,21 @@ cd python && python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode 
 
 **Fact (2026-11-08):** frames identical to the previous one are no longer re-sent, which cut a near-static run from ~9.9 MB/s to **0.89 MB/s** (36 frames sent, 414 skipped in 15 s). Transmission is slowed rather than stopped — an unchanged frame still goes out once a second — because what the device does with a silent stream has never been observed.
 
-**Fact (2026-11-08):** the **C++17 protocol core** is in [`native/`](native/) — usbmux, handshake, record framing and input decode, dependency-free, 56 tests, and **byte-identical to the Python reference on 19 conformance vectors**. Profiling first established that a native port is *not* a speed win (encode is 4.9 ms of a 33 ms budget and already native C); the gains are a single binary with no Python runtime and a base for the planned Rust implementation. See [native port](docs/native-port.md).
+**Fact (2026-11-08) — milestone 1 of the native port, superseded in counts by the 2026-11-09 entry below:** the **C++17 protocol core** is in [`native/`](native/) — usbmux, handshake, record framing and input decode, dependency-free, 56 tests, and **byte-identical to the Python reference on 19 conformance vectors**. Profiling first established that a native port is *not* a speed win (encode is 4.9 ms of a 33 ms budget and already native C); the gains are a single binary with no Python runtime and a base for the planned Rust implementation. See [native port](docs/native-port.md).
 
-**Remaining:** the rest of the native port (D-Bus, capture, encode, main loop), the Rust implementation, and the unexercised paths. Every frame is re-sent in full at ~372 KB even when nothing changed (~10 MB/s); not re-sending unchanged frames is the obvious saving. Multi-touch, keyboard, `field0` 16/17, reconfiguration, the TLV `0x70` subtype and differential JPEG remain unexercised.
+**Fact (2026-11-09): the native port is complete in scope — and has never been run.** `native/` now implements every subsystem the Python host has: the protocol core, JPEG frame generation, Mutter's D-Bus contracts, the live session over GIO, PipeWire capture over GStreamer, and the composed loop behind a `hashi` binary. 4,040 lines, **129 tests**, and agreement with the Python reference on **65 byte vectors, 9 GVariant payloads and 8 whole JPEG frames, 0 mismatches**. Three results are worth carrying forward:
 
-**Resume from:** this Current Status section, then [Fedora next steps](docs/fedora-next-steps.md). The Windows return handoff `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; there is no pending Windows work. The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
+- **libjpeg-turbo through the TurboJPEG API is byte-identical to the same library through Pillow**, on all 8 fixtures including 1280×960 pseudo-random noise and single-pixel chroma edges. Five parameters are load-bearing — quality 80, 4:2:0, and the three JFIF density settings, without which TurboJPEG writes "no units, 1×1" where the captured frames carry 120 dpi. A solid black buffer reproduces the captured first record exactly: 19,827 bytes, SHA-256 `317955d8…`.
+- **The GVariant payloads the port would put on the bus are identical to PyGObject's**, down to dictionary ordering and the empty `@a{sv} {}` case — a stronger check than comparing the arguments as data, since it is the actual message.
+- **Each comparison was given a negative control before being trusted.** A conformance harness that cannot fail proves nothing: quality 79-vs-80 and density 121-vs-120 are both caught (the second at *equal length*, so bytes are genuinely being read), and so is rendering the cursor mode as `int32` instead of `uint32`.
+
+**Correction to the handoff:** no packages needed installing. `libturbojpeg` 3.1.4.1, `gstreamer-1.0`/`gstreamer-app-1.0` 1.28.8 and `gio-2.0` 2.90.1 are all present and link; the expected `sudo dnf install` step was unnecessary, and no `sudo` was used. See [native port](docs/native-port.md).
+
+**The port being scope-complete is not the same as it working.** `hashi run` refuses without `--allow-session` and that flag has not been passed: no Mutter session has been opened by the native code, no GStreamer pipeline started, and no byte sent to the iPad from it. The ordering in `session.cpp` is copied from the Python host precisely because that ordering is what FED-HOST-E001 confirmed, but the composition is an **Inference** for this implementation. On the evidence of the Python host's first run, what a first native run would most plausibly expose is teardown ordering and the consumer gate — not the protocol, which is validated twice over.
+
+**Remaining:** a first live run of the native host; the Rust implementation and a shell-script launcher (the same conformance harness applies, and all three comparison kinds are language-agnostic since each diffs text or bytes on stdout); optionally switching `plist.cpp` to the now-installed `libplist` 2.7.0, which is a judgement call rather than a fix; and the unexercised paths. Multi-touch, keyboard, `field0` 16/17, reconfiguration, the TLV `0x70` subtype and differential JPEG remain unexercised **in both implementations** — `field0` 3, 4, 7, 8, 9 and 11–17 have never been seen on the wire, only 5, 6 and 10.
+
+**Resume from:** this Current Status section, then [native port](docs/native-port.md) for the current frontier and [Fedora next steps](docs/fedora-next-steps.md) for the older backlog. The Windows return handoff `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; there is no pending Windows work. The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
 
 **Historical — returning to Windows with the private transfer ZIP:** this route is closed. `RETURN-TO-WINDOWS.md` and `WINDOWS-CODEX-HANDOFF.md` were removed on 2026-11-08, the protocol work they guided is finished, and the host now runs on Linux (FED-HOST-E001).
 
