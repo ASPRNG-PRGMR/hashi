@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <string>
 
+#include "hashi/capture.hpp"
 #include "hashi/gnome.hpp"
 #include "hashi/jpeg.hpp"
 #include "hashi/startup.hpp"
@@ -154,6 +155,16 @@ int main() {
     emit_plan("gnome_inject_control_17", 17, 10, 10);
     emit_plan("gnome_inject_unseen_11", 11, 10, 10);
   }
+
+  // --- Capture pipeline -------------------------------------------------
+  // The description is a plain string, so it is compared exactly. A drifted
+  // property here -- a missing always-copy, a dropped drop=true -- would
+  // change the capture's behaviour without changing any byte on the wire,
+  // which is the kind of difference a protocol test would never catch.
+  std::printf("pipeline_default %s\n",
+              capture::pipeline_description(42).c_str());
+  std::printf("pipeline_custom %s\n",
+              capture::pipeline_description(0, 640, 480, 60).c_str());
 
   // --- usbmux header framing -------------------------------------------
   // The plist body itself is not compared: usbmuxd parses XML, and the two

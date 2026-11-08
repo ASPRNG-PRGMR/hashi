@@ -46,6 +46,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "python"))
 
 import hashi_gnome as gnome  # noqa: E402
+import hashi_host as host  # noqa: E402
 import hashi_jpeg as jpeg  # noqa: E402
 import hashi_startup as startup  # noqa: E402
 import hashi_stream as stream  # noqa: E402
@@ -154,6 +155,10 @@ def reference() -> dict[str, str]:
     plan("gnome_inject_control_16", 16, 10, 10)
     plan("gnome_inject_control_17", 17, 10, 10)
     plan("gnome_inject_unseen_11", 11, 10, 10)
+
+    # --- Capture pipeline -------------------------------------------------
+    out["pipeline_default"] = host.capture_pipeline_description(42)
+    out["pipeline_custom"] = host.capture_pipeline_description(0, 640, 480, 60)
     return out
 
 

@@ -34,6 +34,15 @@ target_compile_options(hashi_protocol PRIVATE
 
 find_package(PkgConfig REQUIRED)
 
+# --- PipeWire capture -------------------------------------------------------
+# GStreamer, with the app plugin for appsink's pull API.
+pkg_check_modules(GST REQUIRED IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
+
+add_library(hashi_capture STATIC src/capture.cpp)
+target_link_libraries(hashi_capture PUBLIC hashi_encode PkgConfig::GST)
+target_compile_options(hashi_capture PRIVATE
+  -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+
 # --- Live Mutter session ----------------------------------------------------
 # GIO for the D-Bus calls. Separate from the contract layer in hashi_protocol,
 # which builds the same arguments without linking anything -- that is what lets
@@ -76,8 +85,19 @@ add_test(NAME encode COMMAND test_encode)
 
 # Emits the core's wire bytes for native/tools/conformance.py to diff against
 # the Python reference implementation.
+# Links hashi_capture for the pipeline description, which is a plain string.
+# That is a tool linking a library, not a dependency of the core: hashi_protocol
+# itself still links nothing but the standard library.
 add_executable(dump_vectors tools/dump_vectors.cpp)
-target_link_libraries(dump_vectors PRIVATE hashi_protocol)
+target_link_libraries(dump_vectors PRIVATE hashi_protocol hashi_capture)
+
+# The capture layer's compositor-free tests.
+add_executable(test_capture tests/test_capture.cpp)
+target_link_libraries(test_capture PRIVATE hashi_capture)
+target_include_directories(test_capture PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+target_compile_options(test_capture PRIVATE -Wall -Wextra)
+add_test(NAME capture COMMAND test_capture)
 
 # The session layer's bus-free tests: variant shapes and refusals.
 add_executable(test_session tests/test_session.cpp)
