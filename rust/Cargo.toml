@@ -1,0 +1,26 @@
+[package]
+name = "hashi"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "A Linux host for the Splashtop Wired XDisplay iPad app: the protocol core"
+license = "MIT"
+publish = false
+
+# No dependencies, deliberately. The C++ core's protocol layer links nothing
+# beyond the standard library and this mirrors that, which means `cargo build`
+# needs no network and no vendored registry. It also keeps the third
+# implementation genuinely independent: if all three agree on bytes, they agree
+# because the protocol was decoded correctly, not because they share a crate.
+[dependencies]
+
+[lib]
+name = "hashi"
+path = "src/lib.rs"
+
+[[bin]]
+name = "dump_vectors"
+path = "src/bin/dump_vectors.rs"
+
+[profile.release]
+overflow-checks = true

@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
-"""Check that the C++ core emits exactly the bytes the Python one does.
+"""Check that the ports emit exactly the bytes the Python reference does.
 
 The Python modules are the reference: they reproduced the captured
 130,375,177-byte outgoing stream byte-for-byte and they are what drove the
 device in FED-LIVE-E001 and FED-HOST-E001. A port is only correct if it
 agrees with them on the wire, so this compares bytes rather than trusting
-that two test suites assert similar things.
+that several test suites assert similar things.
+
+There are two ports: the C++17 core in `native/` and the Rust core in
+`rust/`. Three implementations agreeing on bytes is worth far more than three
+test suites, because a test asserts what its author believed while an
+independent implementation landing on the same bytes is evidence the decode
+itself is right. The Rust core is checked against the same vector set; it is
+skipped with a message, not a failure, if it has not been built.
 
 Two kinds of check run here:
 
@@ -366,6 +373,34 @@ def compare_variants(
     return failures, len(expected)
 
 
+def read_emitted(binary: pathlib.Path) -> dict[str, str]:
+    """Run a dump binary and parse its `name value` lines."""
+    result = subprocess.run([str(binary)], capture_output=True, text=True,
+                            check=True)
+    out: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        name, _, value = line.partition(" ")
+        out[name] = value
+    return out
+
+
+def diff_against(expected: dict[str, str], got: dict[str, str],
+                 label: str) -> list[str]:
+    """Compare one implementation's vectors against the reference's."""
+    failures = []
+    for name, want in sorted(expected.items()):
+        have = got.get(name)
+        if have is None:
+            failures.append(f"{name}: missing from the {label} output")
+        elif have != want:
+            failures.append(f"{name}:\n    python {want}\n    {label:6s} {have}")
+    for name in sorted(set(got) - set(expected)):
+        failures.append(f"{name}: emitted by {label} but not by the reference")
+    return failures
+
+
 def compare_frames(dump_frame: pathlib.Path) -> list[str]:
     """Encode each fixture both ways and diff the bytes. Returns failures."""
     try:
@@ -436,39 +471,37 @@ def main() -> int:
                   f"build it:  cmake -S native -B native/build && "
                   f"cmake --build native/build")
             return 2
-    result = subprocess.run([str(binary)], capture_output=True, text=True,
-                            check=True)
-    native: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        if not line.strip():
-            continue
-        name, _, value = line.partition(" ")
-        native[name] = value
-
     expected = reference()
-    failures = []
-    for name, want in sorted(expected.items()):
-        got = native.get(name)
-        if got is None:
-            failures.append(f"{name}: missing from the C++ output")
-        elif got != want:
-            failures.append(f"{name}:\n    python {want}\n    c++    {got}")
+    failures = diff_against(expected, read_emitted(binary), "c++")
 
-    extra = sorted(set(native) - set(expected))
-    for name in extra:
-        failures.append(f"{name}: emitted by C++ but not by the reference")
+    # The Rust core is the third implementation. Not having built it is a skip
+    # rather than a failure, so the harness still works in a C++-only checkout.
+    rust_binary = ROOT / "rust" / "target" / "release" / "dump_vectors"
+    rust_failures: list[str] = []
+    rust_compared = 0
+    if rust_binary.exists():
+        rust_failures = diff_against(expected, read_emitted(rust_binary), "rust")
+        rust_compared = len(expected)
+    else:
+        print(f"note: the Rust core is not built, so it was not compared.\n"
+              f"      build it:  cd rust && cargo build --release")
 
     variant_failures, variant_count = compare_variants(variant_binary)
     frame_failures = compare_frames(frame_binary)
 
-    for line in failures + variant_failures + frame_failures:
+    for line in failures + rust_failures + variant_failures + frame_failures:
         print("MISMATCH " + line)
-    print(f"\n{len(expected)} vectors compared, {len(failures)} mismatches")
+    print(f"\n{len(expected)} vectors compared against C++, "
+          f"{len(failures)} mismatches")
+    if rust_compared:
+        print(f"{rust_compared} vectors compared against Rust, "
+              f"{len(rust_failures)} mismatches")
     print(f"{variant_count} variants compared, "
           f"{len(variant_failures)} mismatches")
     print(f"{len(FRAME_FIXTURES)} frames compared, "
           f"{len(frame_failures)} mismatches")
-    return 1 if (failures or variant_failures or frame_failures) else 0
+    return 1 if (failures or rust_failures or variant_failures
+                 or frame_failures) else 0
 
 
 if __name__ == "__main__":

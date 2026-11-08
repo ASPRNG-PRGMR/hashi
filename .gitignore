@@ -9,3 +9,6 @@ __pycache__/
 # C++ build trees
 native/build/
 build/
+
+# Rust build tree
+rust/target/
