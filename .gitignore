@@ -5,3 +5,7 @@ study/**/build/
 
 __pycache__/
 *.pyc
+
+# C++ build trees
+native/build/
+build/
