@@ -40,7 +40,7 @@ The goal is not to clone Splashtop's software — it's to speak its wire protoco
 Run them with — `tests/` has no `__init__.py`, so bare `unittest discover` fails:
 
 ```sh
-python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
+cd python && python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
   tests.test_hashi_startup tests.test_hashi_stream tests.test_hashi_jpeg \
   tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host
 ```
@@ -69,7 +69,7 @@ python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
 
 **Remaining:** the rest of the native port (D-Bus, capture, encode, main loop), the Rust implementation, and the unexercised paths. Every frame is re-sent in full at ~372 KB even when nothing changed (~10 MB/s); not re-sending unchanged frames is the obvious saving. Multi-touch, keyboard, `field0` 16/17, reconfiguration, the TLV `0x70` subtype and differential JPEG remain unexercised.
 
-**Resume from:** [Model handoff](MODEL-HANDOFF.md), then [Fedora next steps](docs/fedora-next-steps.md). The Windows return handoff `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; there is no pending Windows work. The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
+**Resume from:** this Current Status section, then [Fedora next steps](docs/fedora-next-steps.md). The Windows return handoff `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; there is no pending Windows work. The import receipt for the 2026-11-07 transfer is [Fedora backend import](docs/fedora-backend-import.md); its archive was verified and then deleted, and private evidence lives outside this checkout under `~/HASHI-private/`. The `hashi-stuff/` transfer folder referenced below is historical.
 
 **Historical — returning to Windows with the private transfer ZIP:** this route is closed. `RETURN-TO-WINDOWS.md` and `WINDOWS-CODEX-HANDOFF.md` were removed on 2026-11-08, the protocol work they guided is finished, and the host now runs on Linux (FED-HOST-E001).
 

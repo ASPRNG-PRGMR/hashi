@@ -18,7 +18,8 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT))
+# The Python reference implementation lives in python/.
+sys.path.insert(0, str(ROOT / "python"))
 
 import hashi_startup as startup  # noqa: E402
 import hashi_stream as stream  # noqa: E402
