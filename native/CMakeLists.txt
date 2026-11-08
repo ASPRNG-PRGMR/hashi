@@ -34,6 +34,17 @@ target_compile_options(hashi_protocol PRIVATE
 
 find_package(PkgConfig REQUIRED)
 
+# --- Live Mutter session ----------------------------------------------------
+# GIO for the D-Bus calls. Separate from the contract layer in hashi_protocol,
+# which builds the same arguments without linking anything -- that is what lets
+# conformance check them with no compositor running.
+pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
+
+add_library(hashi_session STATIC src/session.cpp)
+target_link_libraries(hashi_session PUBLIC hashi_protocol PkgConfig::GIO)
+target_compile_options(hashi_session PRIVATE
+  -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+
 # --- Frame encoding ---------------------------------------------------------
 # libjpeg-turbo through its own TurboJPEG API. The Python reference reaches the
 # same library through Pillow, and the conformance harness checks that the two
@@ -67,6 +78,21 @@ add_test(NAME encode COMMAND test_encode)
 # the Python reference implementation.
 add_executable(dump_vectors tools/dump_vectors.cpp)
 target_link_libraries(dump_vectors PRIVATE hashi_protocol)
+
+# The session layer's bus-free tests: variant shapes and refusals.
+add_executable(test_session tests/test_session.cpp)
+target_link_libraries(test_session PRIVATE hashi_session)
+target_include_directories(test_session PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+target_compile_options(test_session PRIVATE -Wall -Wextra)
+add_test(NAME session COMMAND test_session)
+
+# Emits the real GVariant payloads as GLib's own text form, so the harness can
+# check that PropValue -> GVariant lands what PyGObject builds. Creates no
+# session and makes no D-Bus call.
+add_executable(dump_variants tools/dump_variants.cpp)
+target_link_libraries(dump_variants PRIVATE hashi_session)
+target_compile_options(dump_variants PRIVATE -Wall -Wextra)
 
 # Encodes one raw-RGB fixture so the harness can diff a whole frame, scan data
 # included, against what Pillow produces from the same pixels.

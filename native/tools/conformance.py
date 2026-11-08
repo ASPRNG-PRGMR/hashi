@@ -16,6 +16,11 @@ Two kinds of check run here:
   so what has to agree is the signatures, keys, defaults and values. That is
   where a port degrades quietly -- a uint32 cursor mode sent as an int32, or a
   default that drifts away from the verified contract.
+* **Variants** -- the actual GVariant payloads, printed by GLib itself. The
+  canonical vectors check that both implementations *decide* on the same
+  signatures and values; these check the decision survives contact with GLib,
+  so a difference is a real difference in the message that would go on the bus.
+  Building a variant creates no session and makes no D-Bus call.
 * **Frames** -- whole JPEG frames, scan data included, encoded from identical
   pixel buffers. The Python side reaches libjpeg-turbo through Pillow and the
   C++ side through the TurboJPEG API, so this is the check that the entropy
@@ -275,6 +280,69 @@ FRAME_FIXTURES = [
 ]
 
 
+def variant_reference() -> dict[str, str]:
+    """The same payloads dump_variants.cpp emits, built with PyGObject.
+
+    Printed with GLib's own formatter on both sides, so presentation cannot be
+    the difference.
+    """
+    modes_two = [gnome.virtual_monitor_mode(),
+                 gnome.virtual_monitor_mode(640, 480, 60.0, is_preferred=False)]
+    cases = {
+        "variant_mode_default": gnome.virtual_monitor_mode(),
+        "variant_mode_no_refresh": gnome.virtual_monitor_mode(1280, 960, None),
+        "variant_record_virtual_default": gnome.record_virtual_properties(),
+        "variant_record_virtual_platform_true":
+            gnome.record_virtual_properties(is_platform=True),
+        "variant_record_virtual_cursor_hidden":
+            gnome.record_virtual_properties(
+                cursor_mode=gnome.CURSOR_MODE_HIDDEN),
+        "variant_session_props_empty":
+            gnome.screen_cast_session_properties(),
+        "variant_session_props_id":
+            gnome.screen_cast_session_properties("17"),
+        "variant_session_props_both":
+            gnome.screen_cast_session_properties("17",
+                                                 disable_animations=True),
+        "variant_record_virtual_two_modes":
+            gnome.record_virtual_properties(modes_two),
+    }
+    return {name: gnome.to_glib_variant_dict(properties).print_(True)
+            for name, properties in cases.items()}
+
+
+def compare_variants(
+        dump_variants: pathlib.Path) -> tuple[list[str], int]:
+    """Diff the GVariant payloads both implementations would send."""
+    try:
+        import gi  # noqa: F401
+        from gi.repository import GLib  # noqa: F401
+    except ImportError:
+        return (["variants: PyGObject is unavailable, so the reference "
+                 "cannot build a GVariant"], 0)
+
+    result = subprocess.run([str(dump_variants)], capture_output=True,
+                            text=True, check=True)
+    native: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        name, _, value = line.partition(" ")
+        native[name] = value
+
+    expected = variant_reference()
+    failures = []
+    for name, want in sorted(expected.items()):
+        got = native.get(name)
+        if got is None:
+            failures.append(f"{name}: missing from the C++ output")
+        elif got != want:
+            failures.append(f"{name}:\n    python {want}\n    c++    {got}")
+    for name in sorted(set(native) - set(expected)):
+        failures.append(f"{name}: emitted by C++ but not by the reference")
+    return failures, len(expected)
+
+
 def compare_frames(dump_frame: pathlib.Path) -> list[str]:
     """Encode each fixture both ways and diff the bytes. Returns failures."""
     try:
@@ -337,13 +405,14 @@ def main() -> int:
               f"cmake --build native/build")
         return 2
 
+    variant_binary = binary.parent / "dump_variants"
     frame_binary = binary.parent / "dump_frame"
-    if not frame_binary.exists():
-        print(f"dump_frame not found at {frame_binary}\n"
-              f"build it:  cmake -S native -B native/build && "
-              f"cmake --build native/build")
-        return 2
-
+    for needed in (variant_binary, frame_binary):
+        if not needed.exists():
+            print(f"{needed.name} not found at {needed}\n"
+                  f"build it:  cmake -S native -B native/build && "
+                  f"cmake --build native/build")
+            return 2
     result = subprocess.run([str(binary)], capture_output=True, text=True,
                             check=True)
     native: dict[str, str] = {}
@@ -366,14 +435,17 @@ def main() -> int:
     for name in extra:
         failures.append(f"{name}: emitted by C++ but not by the reference")
 
+    variant_failures, variant_count = compare_variants(variant_binary)
     frame_failures = compare_frames(frame_binary)
 
-    for line in failures + frame_failures:
+    for line in failures + variant_failures + frame_failures:
         print("MISMATCH " + line)
     print(f"\n{len(expected)} vectors compared, {len(failures)} mismatches")
+    print(f"{variant_count} variants compared, "
+          f"{len(variant_failures)} mismatches")
     print(f"{len(FRAME_FIXTURES)} frames compared, "
           f"{len(frame_failures)} mismatches")
-    return 1 if (failures or frame_failures) else 0
+    return 1 if (failures or variant_failures or frame_failures) else 0
 
 
 if __name__ == "__main__":
