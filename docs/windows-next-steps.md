@@ -14,7 +14,7 @@ Next: WIN-NEXT-02, a narrow startup-exchange/framing investigation using existin
 
 ## Current continuation — 2026-11-03
 
-This update supersedes conflicting historical statements below. Start with [RETURN-TO-WINDOWS.md](../RETURN-TO-WINDOWS.md) and read [Windows return investigation](windows-return-investigation.md) completely. **Fact:** Active workspace is the Git checkout C:\Users\noobieGG\Downloads\hashi. Preserve its older nested transfer.
+This update supersedes conflicting historical statements below. `RETURN-TO-WINDOWS.md` was removed on 2026-11-08; read [Windows return investigation](windows-return-investigation.md) completely. **Fact:** Active workspace is the Git checkout C:\Users\noobieGG\Downloads\hashi. Preserve its older nested transfer.
 
 **Fact:** The socket-identity and direct Winsock parts of WIN-NEXT-01 are established; sampled successful sends decode as 1280×960 JPEG images. **Unresolved:** Six buffers in the DPI-corrected white/black/white trial were identical and did not match the square. The next experiment must first verify actual test-window visibility, session/desktop, physical monitor bounds and captured image source. Do not infer image dependence from the earlier confounded size statistics or implement a guessed protocol.
 

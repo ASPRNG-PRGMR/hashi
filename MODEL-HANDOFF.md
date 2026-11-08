@@ -11,7 +11,9 @@ Preserve the current repository, private evidence and working Windows
 installation. Read any applicable repository instructions, inspect `git status`,
 the branch, remotes and recent commits, then read
 `docs/fedora-mode-selection.md`, the top of `docs/fedora-startup-validation.md`,
-the top of `docs/fedora-next-steps.md` and the top of `RETURN-TO-WINDOWS.md`.
+and the top of `docs/fedora-next-steps.md`. (`RETURN-TO-WINDOWS.md` and
+`WINDOWS-CODEX-HANDOFF.md` were removed on 2026-11-08; there is no pending
+Windows work.)
 `docs/windows-startup-framing.md` holds the existing capture boundary and
 `docs/fedora-backend-import.md` the import receipt. Label meaningful conclusions
 **Fact**, **Inference** or **Hypothesis**, and keep evidence IDs, hashes, UTC
