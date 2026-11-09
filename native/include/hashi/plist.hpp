@@ -25,7 +25,13 @@ class Value;
 using Dict = std::map<std::string, Value>;
 using Array = std::vector<Value>;
 
-enum class Type { Null, Bool, Integer, String, Dict, Array, Data };
+// The two container enumerators are spelled Dictionary and List rather than
+// Dict and Array so that they do not reuse the names of the aliases above.
+// Reusing them is legal -- a scoped enumerator is only reachable as
+// Type::Dict, so it cannot actually hide the alias -- but GCC's -Wshadow
+// reports it anyway, and a C++20 `using enum Type` would make the clash
+// real. Distinct names cost nothing and keep the warning honest.
+enum class Type { Null, Bool, Integer, String, Dictionary, List, Data };
 
 /// One plist node. Copyable; nesting is held by value through shared storage
 /// so that a Dict can contain Values without an incomplete-type problem.

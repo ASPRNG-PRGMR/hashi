@@ -62,7 +62,7 @@ std::pair<std::uint32_t, plist::Value> decode_message(const Bytes& data) {
   }
   const std::string body(data.begin() + kHeaderLen, data.begin() + header.length);
   plist::Value value = plist::loads(body);
-  if (value.type() != plist::Type::Dict) {
+  if (value.type() != plist::Type::Dictionary) {
     throw ProtocolError("usbmux payload is not a dictionary");
   }
   return {header.tag, value};
@@ -119,7 +119,7 @@ std::string result_name(const plist::Value& payload) {
 std::vector<Device> parse_device_list(const plist::Value& payload) {
   const plist::Value& list = payload.get("DeviceList");
   if (list.is_null()) return {};
-  if (list.type() != plist::Type::Array) {
+  if (list.type() != plist::Type::List) {
     throw ProtocolError("DeviceList is not an array");
   }
   std::vector<Device> out;
@@ -128,7 +128,7 @@ std::vector<Device> parse_device_list(const plist::Value& payload) {
     const plist::Value& id = entry.get("DeviceID");
     if (id.type() == plist::Type::Integer) device.device_id = id.as_integer();
     const plist::Value& properties = entry.get("Properties");
-    if (properties.type() == plist::Type::Dict) {
+    if (properties.type() == plist::Type::Dictionary) {
       const plist::Value& serial = properties.get("SerialNumber");
       if (serial.type() == plist::Type::String) device.serial = serial.as_string();
       const plist::Value& product = properties.get("ProductID");

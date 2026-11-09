@@ -92,10 +92,10 @@ void write(std::ostringstream& out, const Value& value, int depth) {
       indent(out, depth);
       out << "<data>" << base64(value.as_data()) << "</data>\n";
       break;
-    case Type::Dict:
+    case Type::Dictionary:
       write_dict(out, value.as_dict(), depth);
       break;
-    case Type::Array: {
+    case Type::List: {
       const Array& items = value.as_array();
       if (items.empty()) {
         indent(out, depth);
@@ -249,9 +249,9 @@ Value::Value(int v) : type_(Type::Integer), integer_(v) {}
 Value::Value(const char* v) : type_(Type::String), string_(v) {}
 Value::Value(std::string v) : type_(Type::String), string_(std::move(v)) {}
 Value::Value(Dict v)
-    : type_(Type::Dict), dict_(std::make_shared<Dict>(std::move(v))) {}
+    : type_(Type::Dictionary), dict_(std::make_shared<Dict>(std::move(v))) {}
 Value::Value(Array v)
-    : type_(Type::Array), array_(std::make_shared<Array>(std::move(v))) {}
+    : type_(Type::List), array_(std::make_shared<Array>(std::move(v))) {}
 
 Value Value::data(Bytes v) {
   Value out;
@@ -276,12 +276,12 @@ const std::string& Value::as_string() const {
 }
 
 const Dict& Value::as_dict() const {
-  if (type_ != Type::Dict) throw ProtocolError("plist value is not a dict");
+  if (type_ != Type::Dictionary) throw ProtocolError("plist value is not a dict");
   return *dict_;
 }
 
 const Array& Value::as_array() const {
-  if (type_ != Type::Array) throw ProtocolError("plist value is not an array");
+  if (type_ != Type::List) throw ProtocolError("plist value is not an array");
   return *array_;
 }
 
@@ -291,7 +291,7 @@ const Bytes& Value::as_data() const {
 }
 
 const Value& Value::get(const std::string& key) const {
-  if (type_ != Type::Dict) return kNull;
+  if (type_ != Type::Dictionary) return kNull;
   auto it = dict_->find(key);
   return it == dict_->end() ? kNull : it->second;
 }
