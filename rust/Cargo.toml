@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A Linux host for the Splashtop Wired XDisplay iPad app: the protocol core"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 publish = false
 
 # No dependencies, deliberately. The C++ core's protocol layer links nothing

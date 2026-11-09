@@ -359,6 +359,21 @@ a compositor-native virtual output.
 | Protocol capture tooling | Capture of the host agent's application stream | Wireshark/usbmon were not what produced the decode |
 | Reverse engineering | Ghidra on the Splashtop host agent | Driver diffing (BinDiff/BinExport/ghidriff) never ran — see Phase 0.75 |
 
-## License & Scope Note
+## License
+
+Dual-licensed under either of
+
+- Apache License, Version 2.0 ([`LICENSE-APACHE`](LICENSE-APACHE), or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([`LICENSE-MIT`](LICENSE-MIT), or <http://opensource.org/licenses/MIT>)
+
+at your option. `SPDX-License-Identifier: MIT OR Apache-2.0`.
+
+This is the same dual licence the Rust project and most of its ecosystem use, chosen for the same two reasons: Apache-2.0 carries an express patent grant and a contribution clause, which matter for a project that reimplements someone else's protocol, while MIT stays maximally compatible with GPL-licensed code — relevant here because the Mutter interfaces this host drives belong to a GPL compositor.
+
+Unless you state otherwise, any contribution you intentionally submit for inclusion in this work is dual-licensed as above, with no additional terms or conditions.
+
+The licence covers this repository's own code and documentation. It says nothing about the protocol it describes, and grants no rights in anyone else's software.
+
+## Scope Note
 
 This project does not include, redistribute, or depend on any Splashtop software, binaries, or proprietary protocol specifications. All findings are derived from independent observation of driver installation artifacts, publicly documented Microsoft platform APIs, and standard USB/display protocol analysis — in the same tradition as projects like Samba, Wine, and libimobiledevice. Raw captures (USB, WPP traces, frame dumps, pairing records) are never committed; only derived, described behavior is published.
