@@ -274,6 +274,13 @@ int command_run(const Config& config) {
 int main(int argc, char** argv) {
   Config config;
   if (!parse(argc, argv, config)) return 2;
+  // Asking for help is not an error: usage already goes to stdout, so this
+  // only keeps "unknown command --help" off stderr and the status at 0.
+  if (config.command == "help" || config.command == "--help" ||
+      config.command == "-h") {
+    usage();
+    return 0;
+  }
   try {
     if (config.command == "plan") return command_plan(config);
     if (config.command == "devices") return command_devices(config);
