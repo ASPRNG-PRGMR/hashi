@@ -150,6 +150,48 @@ an encoder can be held to exactly.
 drift by transcription. They are published ISO/IEC 10918-1 data in both
 places; no vendor table is transcribed.
 
+### Two TurboJPEG APIs, because 2.x is still what distributions ship
+
+**Fact.** The table above is the libjpeg-turbo **3.x** API, and that API does
+not exist on 2.x. libjpeg-turbo 3.0 replaced `tjInitCompress`/`tjCompress2`
+with `tj3Init`/`tj3Set`/`tj3Compress8` and shipped no compatibility macro, so
+`encoder.cpp` as first written did not compile anywhere 2.x was installed. CI
+is what found it: `ubuntu-latest` is Ubuntu **26.04**, whose
+`libturbojpeg0-dev` is pinned at **2.1.5**, and every `tj3*` name came back
+"not declared in this scope". The local machine has 3.1.4.1, so the whole port
+had been developed and validated against the only API it could see.
+
+`encoder.cpp` therefore carries both paths and `CMakeLists.txt` picks one from
+the pkg-config version, defining `HASHI_HAVE_TURBOJPEG3`. 3.x stays preferred
+because `TJPARAM_DENSITY*` is the only *API* for the JFIF density. The 2.x
+path needs two corrections to reach the same bytes, and both were found by
+encoding the same pixels through both paths rather than by reading docs:
+
+| Correction | Why |
+| --- | --- |
+| `TJFLAG_ACCURATEDCT` | TurboJPEG 2.x defaults compression to the **fast** integer DCT — the reason the flag exists at all. 3.x flipped it, so `TJPARAM_FASTDCT` defaults off. |
+| APP0 written afterwards | 2.x has no density API whatsoever, so the units byte and the two 16-bit densities are placed into the JFIF segment after encoding. |
+
+The second is the sort of thing that should be loud if it ever stops being
+true, so `patch_jfif_density` checks the segment's shape — `FFD8 FFE0`, length,
+`"JFIF\0"` — and throws rather than patching whatever sits at byte 13.
+
+**The DCT default is the dangerous half.** Without `TJFLAG_ACCURATEDCT` every
+header still matches: APP0, both DQTs, all four DHTs and SOF0 are identical,
+and only the entropy-coded scan diverges — the first differing byte lands
+around offset 630, past everything a header comparison looks at. A conformance
+suite that checked preludes alone would have called it a pass.
+
+**Fact, verified.** With both corrections the two paths are byte-identical
+across **132 cases** — six frame sizes including 1280x960 and a 1x1
+degenerate, quality 1/50/80/100, density 1/72/120/300/65535, over random
+noise, a flat black frame and a gradient — with zero mismatches. The 2.x path
+was then built deliberately on a 3.x machine (`-DHASHI_USE_TURBOJPEG3=OFF`,
+which the legacy entry points still being present and undeprecated in 3.1.4
+makes possible) and run through the whole conformance harness against the
+Python reference: 65 vectors, 9 variants and **8 frames, 0 mismatches**. So
+the fallback is held to Pillow's bytes, not merely to the other path.
+
 ### Mutter: the contract layer is split from the bus
 
 `gnome.hpp` builds every D-Bus argument and plans every injection while

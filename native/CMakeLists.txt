@@ -60,9 +60,39 @@ target_compile_options(hashi_session PRIVATE
 # agree on bytes rather than assuming that "both use libjpeg" is enough.
 pkg_check_modules(TURBOJPEG REQUIRED IMPORTED_TARGET libturbojpeg)
 
+# libjpeg-turbo 3.0 replaced the whole TurboJPEG entry-point family -- tj3Init
+# and tj3Compress8 for tjInitCompress and tjCompress2 -- with no compatibility
+# shim, so which one src/encoder.cpp may call is decided here rather than left
+# to a header probe. 3.x is preferred because it is the only one that can set
+# the JFIF density through the API; the 2.x path reaches the same bytes but has
+# to write the density into APP0 itself. See the note at the top of that file.
+if(TURBOJPEG_VERSION VERSION_GREATER_EQUAL 3.0)
+  set(hashi_tj3_default ON)
+else()
+  set(hashi_tj3_default OFF)
+endif()
+option(HASHI_USE_TURBOJPEG3
+  "Use the libjpeg-turbo 3.x tj3* API. Off builds the 2.x fallback, which is \
+byte-identical and can be selected deliberately to test it."
+  ${hashi_tj3_default})
+
+if(HASHI_USE_TURBOJPEG3)
+  message(STATUS
+    "libjpeg-turbo ${TURBOJPEG_VERSION}: encoding through the tj3* API")
+else()
+  message(STATUS
+    "libjpeg-turbo ${TURBOJPEG_VERSION}: encoding through the legacy tj* API")
+  if(TURBOJPEG_VERSION VERSION_GREATER_EQUAL 3.0)
+    message(STATUS
+      "  (3.x is installed; the fallback was selected explicitly)")
+  endif()
+endif()
+
 add_library(hashi_encode STATIC src/encoder.cpp)
 target_link_libraries(hashi_encode PUBLIC hashi_protocol
                                    PRIVATE PkgConfig::TURBOJPEG)
+target_compile_definitions(hashi_encode PRIVATE
+  HASHI_HAVE_TURBOJPEG3=$<BOOL:${HASHI_USE_TURBOJPEG3}>)
 target_compile_options(hashi_encode PRIVATE
   -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 

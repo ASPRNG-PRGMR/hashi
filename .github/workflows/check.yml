@@ -28,6 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # libturbojpeg0-dev is 2.1.5 on Ubuntu 26.04, so this runner compiles the
+      # legacy tj* path in src/encoder.cpp rather than the tj3* one a current
+      # Fedora builds. That is useful rather than unfortunate: between CI and a
+      # local run, both encoder paths get exercised, and conformance holds each
+      # of them to Pillow's bytes on the same machine.
       - name: Install the build and reference dependencies
         run: |
           sudo apt-get update
