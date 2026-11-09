@@ -1,0 +1,108 @@
+# The same ground ./hashi.sh check covers locally, on a non-Fedora runner.
+#
+# Spelled out as separate steps rather than calling ./hashi.sh: the launcher
+# pipes each suite through `tail -3` so a local run stays readable, which is
+# the opposite of what is wanted here, where the full failure output is the
+# only thing available after the fact.
+#
+# Nothing here touches a device. `run` is never invoked, no iPad is attached,
+# and no Mutter session can exist on a headless runner -- so this proves the
+# offline half of the project only: the protocol, the encoders and the
+# agreement between the three implementations.
+
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the build and reference dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake pkg-config \
+            libglib2.0-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libturbojpeg0-dev \
+            python3-gi gir1.2-glib-2.0 \
+            gir1.2-gstreamer-1.0 gir1.2-gst-plugins-base-1.0 \
+            python3-pil
+
+      # Pillow and PyGObject are the reference encoders the ports are diffed
+      # against. The suites import them lazily and skip when they are absent,
+      # so a packaging change would quietly shrink the run rather than break
+      # it. Fail loudly here instead.
+      - name: Check the reference encoders are importable
+        run: |
+          python3 -c 'import PIL; print("Pillow", PIL.__version__)'
+          python3 -c 'import gi; gi.require_version("Gst", "1.0"); gi.require_version("GstApp", "1.0"); from gi.repository import GLib, Gst, GstApp; print("PyGObject ok")'
+
+      - name: Python reference suite
+        working-directory: python
+        run: python3 -m unittest discover -s tests -t .
+
+      - name: Build the C++ core
+        run: |
+          cmake -S native -B native/build
+          cmake --build native/build -j"$(nproc)"
+
+      - name: C++ test binaries
+        run: ctest --test-dir native/build --output-on-failure
+
+      # --offline on purpose, matching hashi.sh: the crate has no dependencies,
+      # so a build must never need the network. If this fails for want of a
+      # crate, that is a dependency that crept in and cost the Rust core the
+      # independence that makes its agreement meaningful.
+      - name: Build the Rust core
+        working-directory: rust
+        run: cargo build --offline --release
+
+      - name: Rust test suite
+        working-directory: rust
+        run: cargo test --offline
+
+      - name: Clippy
+        working-directory: rust
+        run: cargo clippy --offline --all-targets -- -D warnings
+
+      - name: Cross-implementation conformance
+        run: |
+          set -o pipefail
+          python3 native/tools/conformance.py | tee conformance.log
+
+          # A green exit is not enough. Conformance treats an unbuilt Rust core
+          # as a skip: it omits the Rust line and still exits 0. So require
+          # each of the four comparisons to have actually run, with a nonzero
+          # count and no mismatches. Counts are matched as [1-9][0-9]* rather
+          # than literals so that adding vectors does not break CI.
+          require() {
+            grep -Eq "$1" conformance.log || {
+              echo "::error::conformance did not report: $1"
+              exit 1
+            }
+          }
+          require '^[1-9][0-9]* vectors compared against C\+\+, 0 mismatches$'
+          require '^[1-9][0-9]* vectors compared against Rust, 0 mismatches$'
+          require '^[1-9][0-9]* variants compared, 0 mismatches$'
+          require '^[1-9][0-9]* frames compared, 0 mismatches$'
+
+      # plan is pure text and touches nothing, so CI can assert the two hosts
+      # still describe the same run. They drifted once: the native plan omitted
+      # the consumer gate for as long as it existed.
+      - name: The two hosts describe the same run
+        run: |
+          ./native/build/hashi plan > native-plan.txt
+          ( cd python && python3 hashi_cli.py plan ) > python-plan.txt
+          diff -u native-plan.txt python-plan.txt
