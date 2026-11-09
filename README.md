@@ -128,13 +128,13 @@ Using it: plug the iPad in (usbmuxd is udev-activated, so nothing needs starting
 - `lci_iddcx.dll` is very likely a **console IDD**, not a remote-session IDD (inference, not yet confirmed in the binary).
 - The diffing toolchain has been corrected twice: **Diaphora is IDA-only** as of 2026, and **BinExport's prebuilt Ghidra extension stops at Ghidra 11.0.3** (open protobuf-mismatch bug). First pass is Ghidra 12's built-in Version Tracking and BSim; BinDiff only if BinExport builds against the installed Ghidra.
 
-**What's in progress right now:** Week 1 of the study plan (reading x64 from self-compiled C in Ghidra). After that: install the Visual Studio / Windows SDK / WDK toolchain in the existing GNOME Boxes `win11` VM and build Microsoft's IDDCX sample as Release + PDB and Debug + PDB. See [`docs/driver-build-setup.md`](docs/driver-build-setup.md).
+**Historical (2026-10-14) — what was in progress then:** Week 1 of the study plan (reading x64 from self-compiled C in Ghidra), to be followed by a Visual Studio / Windows SDK / WDK toolchain in the `win11` VM and a build of Microsoft's IDDCX sample. The study phase is complete and the driver build never happened: the Windows route closed once Phase 1 capture established that the wire protocol lives in the host agent rather than in the IddCx driver. See [`docs/driver-build-setup.md`](docs/driver-build-setup.md).
 
-**Not started yet:**
-- Enabling IddCx frame capture or WPP tracing against the real Splashtop host (documented, ready to run).
-- Building the sample driver itself.
-- Any Ghidra work on `lci_iddcx.dll`.
-- Anything on the actual Linux implementation — no code exists yet.
+**Historical (2026-10-14) — what had not started then.** Every item below has since been either completed by another route or deliberately abandoned; none is pending:
+- Enabling IddCx frame capture or WPP tracing against the real Splashtop host — **abandoned**; Phase 1 captured the application stream directly instead.
+- Building the sample driver itself — **abandoned**; no driver build is pending.
+- Any Ghidra work on `lci_iddcx.dll` — **superseded**; the Ghidra work that mattered went into the host agent, giving `CProbeUsbmuxd::DoHandshake` at RVA `0x303f0` (FED-START-E001) and the captor/encoder vtables (WIN-BACKEND-E001–E004).
+- Anything on the actual Linux implementation — **done**; three implementations now exist and the Python host has run end to end (FED-HOST-E001).
 
 ## Investigation Methodology
 
@@ -188,32 +188,36 @@ and the rows above are historical. The current frontier is:
                     Windows Display Manager
 ```
 
-## Planned Linux Host Architecture
+## Linux Host Architecture (as built)
+
+No kernel module and no root: the virtual monitor is a userspace one that Mutter
+owns, and frames come back out of it over PipeWire. See
+[Linux host architecture](docs/linux-host-architecture.md) for why, and what that
+rules out.
 
 ```
                           iPad (USB)
                      Splashtop app, unmodified
                                │
                                ▼
-                usbmuxd / libimobiledevice
-              USB mux, pairing, lockdownd tunnel
+                     usbmuxd (Unix socket)
+          device discovery, Connect to port 6789 byte-swapped
                                │
                                ▼
-                Protocol-compat daemon (Rust)
-        Handshake, framing, codec, input events
-                        │              │
-                        ▼              ▼
-              evdi kernel driver   DRM writeback
-              (virtual display)    (alternative)
-                        │              │
-                        └──────┬───────┘
-                               ▼
-                Wayland compositor / X11 (Xrandr)
-             Registers virtual output, composites frame
+                   HASHI host  (python/ · native/ · rust/)
+        handshake · record framing · JPEG prelude · input decode
+                        │                        ▲
+       RecordVirtual    │                        │  type-7 records
+       pinned 1280x960  ▼                        │  (absolute pixels)
+              Mutter ScreenCast  ─────────────►  NotifyPointer*
+              virtual monitor, cursor embedded   RemoteDesktop
                                │
                                ▼
-                     Encode + send back
-                 GStreamer / FFmpeg over USB
+                   PipeWire  ──►  GStreamer pipewiresrc
+                               │
+                               ▼
+                 libjpeg-turbo, quality 80, 4:2:0
+                 paced to 30 fps, unchanged frames skipped
                                │
                                ▼
               Frame reaches iPad's Splashtop renderer
@@ -221,7 +225,19 @@ and the rows above are historical. The current frontier is:
 
 ## Development Phases
 
+This roadmap was written at the start of the project, when the plan was to reach
+Linux by way of a Windows driver analysis. **It is kept as a record of the
+original plan, not as a description of the work.** The route actually taken was
+shorter: Phase 1 capture established that the protocol lives in the host agent
+and the USB traffic rather than in the IddCx driver, which closed the Windows
+driver phases outright, and the Linux display layer landed on Mutter's D-Bus
+APIs rather than on the `evdi` kernel module the plan assumed. Each phase below
+carries its real outcome. The authoritative account is the Current Status
+section above.
+
 ### Phase 0 — Windows Host Architecture Discovery
+
+**Outcome: complete in what mattered; the rest abandoned with the Windows route.**
 - [x] Baseline system snapshot (`driverquery`, services, Device Manager)
 - [x] Identify Apple driver stack introduced by iTunes/Apple Devices install
 - [x] Identify LuminonCore driver packages (`lci_iddcx.inf`, `lci_proxywddm.inf`) via `pnputil`
@@ -235,13 +251,21 @@ and the rows above are historical. The current frontier is:
 - [ ] Inspect `lci_proxywddm.inf` package to determine the kernel driver's actual responsibility
 - [ ] Trace process interactions (Process Monitor/Process Explorer) between host app, `lci_iddcx.dll`, `lci_proxywddm.sys`
 
-### Phase 0.25 — Prerequisite Skills *(current focus, started 2026-10-14)*
+### Phase 0.25 — Prerequisite Skills
+
+**Outcome: complete.** The skills phase and the Ghidra study check are done; do not
+restart them and do not rebuild the study DLL. Week 1 was worked through in
+[`study/week1/`](study/week1/); Weeks 2–4 were overtaken by the real agent
+analysis rather than finished as exercises.
 - [ ] Week 1: x64 reading from own compiled C (Ghidra 12.1.4 on Fedora, MinGW-built PE binaries) — `study/week1/`
 - [ ] Week 2: PE format, MSVC idioms, C++ objects, Windows API calls; TryHackMe "Windows x64 Assembly" then "Windows Reversing Intro"
 - [ ] Week 3: WDF/IddCx function-table and callback-table patterns; build and read the sample (overlaps Phase 0.5)
 - [ ] Week 4: first structured look at `lci_iddcx.dll` with the checklist in the study plan (overlaps Phase 0.75)
 
 ### Phase 0.5 — Reference Binary Preparation
+
+**Outcome: abandoned.** No toolchain was installed and no sample driver was ever
+built. Nothing here is pending.
 - [ ] Install Visual Studio 2022 or 2026 Community, Windows SDK, current WDK, in the existing `win11` Boxes VM
 - [ ] Verify toolchain installation
 - [ ] Clone `Windows-driver-samples`, locate `video/IndirectDisplay/`
@@ -249,6 +273,11 @@ and the rows above are historical. The current frontier is:
 - [ ] Build the sample as **Release + PDB** (closest shape to the vendor binary) and **Debug + PDB** (easiest to read)
 
 ### Phase 0.75 — Binary Diffing
+
+**Outcome: abandoned as planned, superseded in substance.** No BinDiff/BinExport
+or Version Tracking diff of `lci_iddcx.dll` was run. The disassembly that the
+protocol actually needed was done directly against the Splashtop host agent —
+see FED-START-E001 and WIN-BACKEND-E001–E004 in the Current Status section.
 - [ ] Import both sample driver (with PDB) and `lci_iddcx.dll` into Ghidra
 - [ ] Locate the WDF and IddCx function tables and the `IDD_CX_CLIENT_CONFIG` callback fill (names every DDI callback without diffing)
 - [ ] Run Ghidra Version Tracking for a first-pass bulk match; try BSim
@@ -257,7 +286,12 @@ and the rows above are historical. The current frontier is:
 - [ ] Open `lci_iddcx.dll` in Ghidra directly, informed by the diff results
 - [ ] Trace Splashtop host ↔ driver IPC mechanism (Process Monitor → Process Explorer → API Monitor → WinDbg as needed)
 
-### Phase 1 — Protocol Capture *(higher priority than Phase 0.75; see devlog C5)*
+### Phase 1 — Protocol Capture
+
+**Outcome: complete (FED-FRAME-E001, FED-START-E001, FED-STREAM-E001).** The
+application stream was captured and is reproduced offline byte-for-byte: the
+record boundary, the handshake, 1,903 tag-6 JPEG records at 1280×960, and the
+whole 130,375,177-byte host→device direction at the same SHA-256.
 - [ ] Stop `usbmuxd` on the Fedora host, redirect the iPad into the `win11` VM (USB redirection, not VFIO), confirm the guest sees it
 - [ ] Capture raw USB traffic (Wireshark + usbmon on the Fedora host) during connect/pairing
 - [ ] Capture raw USB traffic (Wireshark + usbmon or equivalent) during mirror mode
@@ -267,39 +301,65 @@ and the rows above are historical. The current frontier is:
 - [ ] Identify video codec and frame container format
 
 ### Phase 2 — USB/Pairing Layer (Linux)
+
+**Outcome: complete (FED-HOST-E001).** `usbmuxd` discovery and the
+application-layer handshake are implemented in all three cores, and the real
+unmodified Splashtop iPad app accepts the handshake and streams from it.
 - [ ] Integrate `usbmuxd`/`libimobiledevice` for device discovery and tunnel setup
 - [ ] Reimplement the application-layer handshake identified in Phase 1
 - [ ] Confirm the real Splashtop iPad app accepts the handshake and considers HASHI a valid host
 
 ### Phase 3 — Passive Virtual Display
+
+**Outcome: complete by a different route than planned.** `evdi` and DRM
+writeback were both **ruled out** in favour of a userspace virtual monitor over
+Mutter's `ScreenCast`/`RemoteDesktop` D-Bus APIs — no kernel module, no root.
+See [Linux host architecture](docs/linux-host-architecture.md). `--solid`
+streams a test pattern with no virtual monitor, which is the end-to-end pipe
+proof this phase asked for.
 - [ ] Stand up `evdi` (or DRM writeback) as a virtual display endpoint
 - [ ] Confirm Linux recognizes and can render to the virtual display
 - [ ] Prove the pipe end-to-end with a test pattern, no real frame data yet
 
 ### Phase 4 — Real Frame Pipeline
+
+**Outcome: complete (FED-HOST-E001).** PipeWire capture → JPEG encode → the
+validated transport, with generated frames visible on the iPad.
 - [ ] Implement encode/decode matching the protocol identified in Phase 1
 - [ ] Get working mirror mode against the real iPad app
 
 ### Phase 5 — Extended Display + Input
+
+**Outcome: extended display complete; input partially exercised.** The virtual
+monitor is a separate output rather than a mirror, and iPad touch moves the
+Linux pointer. Multi-touch, keyboard and Pencil remain **decoded but never seen
+on the wire** — only `field0` 5, 6 and 10 have ever been observed.
 - [ ] Extended-display mode (separate virtual output, not mirrored)
 - [ ] Touch/Pencil input passthrough into Linux input events
 
 ### Phase 6 — Native Integration
+
+**Outcome: not done, and partly reconsidered.** There is no packaging and no
+GPU-accelerated encode path; profiling showed encode is 4.9 ms of a 33 ms budget,
+so the latter is not the win it was assumed to be. "Wayland-native" arrived in
+the weaker sense that the host talks to a Wayland compositor over D-Bus, not as
+a compositor-native virtual output.
 - [ ] Wayland-native virtual output integration
 - [ ] Packaging for distribution
 - [ ] GPU-accelerated encode path
 
-## Technical Stack (planned)
+## Technical Stack (as built)
 
-| Component | Technology |
-|---|---|
-| Language | Rust |
-| USB / device pairing | `usbmuxd`, `libimobiledevice` |
-| Virtual display | `evdi` kernel driver (primary), DRM writeback (alternative) |
-| Compositor integration | Wayland (wlroots-based first), X11/Xrandr as fallback |
-| Encode/decode | GStreamer or FFmpeg |
-| Protocol capture tooling | Wireshark, usbmon |
-| Driver reverse engineering | Ghidra 12 (Version Tracking, BSim); BinDiff/BinExport or ghidriff if they build against it |
+| Component | Technology | Differs from the original plan |
+|---|---|---|
+| Language | Python (reference, the one that has run), C++17 (`native/`), Rust (`rust/`) | Plan said Rust only; the reference implementation is Python and all three agree on the bytes |
+| USB / device pairing | `usbmuxd` over its Unix socket, spoken directly | As planned, minus `libimobiledevice`: the plist subset needed is small enough to implement, so the cores stay dependency-light |
+| Virtual display | Mutter `ScreenCast` + `RemoteDesktop` D-Bus APIs (`RecordVirtual`, pinned `modes`) | **Changed.** `evdi` and DRM writeback both ruled out — userspace only, no kernel module, no root |
+| Compositor integration | GNOME / Mutter 51 on Wayland | **Changed.** wlroots-first and the X11/Xrandr fallback were never pursued |
+| Capture | PipeWire via GStreamer `pipewiresrc` | GStreamer, as planned |
+| Encode | libjpeg-turbo — Pillow (Python), TurboJPEG API (C++); baseline JPEG, quality 80, 4:2:0, 120 dpi | Plan left this open; the protocol turned out to require ordinary JPEG, not a video codec |
+| Protocol capture tooling | Capture of the host agent's application stream | Wireshark/usbmon were not what produced the decode |
+| Reverse engineering | Ghidra on the Splashtop host agent | Driver diffing (BinDiff/BinExport/ghidriff) never ran — see Phase 0.75 |
 
 ## License & Scope Note
 
