@@ -75,12 +75,10 @@ build_rust() {
 
 test_python() {
     step "Python reference suite"
-    # Named explicitly: python/tests has no __init__.py, so plain discovery
-    # finds nothing.
-    ( cd "${ROOT}/python" && python3 -m unittest \
-        tests.test_hashi_framing tests.test_hashi_mode tests.test_hashi_startup \
-        tests.test_hashi_stream tests.test_hashi_jpeg tests.test_hashi_usbmux \
-        tests.test_hashi_gnome tests.test_hashi_host tests.test_hashi_cli \
+    # Discovery, not a hand-written module list: a list silently skips any
+    # test file added after it was written. -t . so the modules, which import
+    # each other by bare name, resolve from python/ rather than python/tests.
+    ( cd "${ROOT}/python" && python3 -m unittest discover -s tests -t . \
         2>&1 | tail -3 )
 }
 

@@ -37,13 +37,11 @@ The goal is not to clone Splashtop's software — it's to speak its wire protoco
 
 **Fact:** Repository code is now `hashi_framing.py` (validated record/JPEG-header parser), `hashi_startup.py` (handshake codec, no I/O), `hashi_stream.py` (steady-state codec, no I/O), `hashi_jpeg.py` (frame prelude), `hashi_usbmux.py` (transport, no I/O) `hashi_mode.py` (FED-MODE-E001 dimension rules, with the reconstructed `FindBestResolution` scorer marked **Inference** and not wired into anything) `hashi_gnome.py` (the Mutter virtual-monitor and input-injection layer, FED-DBUS-E001) and `hashi_host.py` (the composition of all of it, never run), with **289 passing tests** in `tests/`. No guessed handshake, resize, codec or control message has been implemented, and none should be.
 
-Run them with — `tests/` has no `__init__.py`, so bare `unittest discover` fails:
+Run them with — `-t .` because the modules import each other by bare name, so
+the import root has to be `python/` rather than `python/tests`:
 
 ```sh
-cd python && python3 -m unittest tests.test_hashi_framing tests.test_hashi_mode \
-  tests.test_hashi_startup tests.test_hashi_stream tests.test_hashi_jpeg \
-  tests.test_hashi_usbmux tests.test_hashi_gnome tests.test_hashi_host \
-  tests.test_hashi_cli
+cd python && python3 -m unittest discover -s tests -t .
 ```
 
 Or all of it at once, from the repository root — builds what is present, runs
