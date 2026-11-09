@@ -122,6 +122,8 @@ int command_plan(const Config& config) {
   if (config.device_id < 0) {
     std::printf("  - discover the device id with ListDevices, selecting "
                 "product id 0x%04x\n", hashi::usbmux::kIpadProductId);
+    std::printf("    (usbmuxd reassigns the id on every attach, so discovery "
+                "is the right default)\n");
   } else {
     std::printf("  - use device id %lld without discovery\n",
                 static_cast<long long>(config.device_id));
@@ -134,20 +136,25 @@ int command_plan(const Config& config) {
   if (config.solid) {
     std::printf("  - stream a solid black 1280x960 frame; no virtual monitor, "
                 "and no injection\n");
+    std::printf("    (the black frame is byte-identical to the captured "
+                "stream's first record, so this separates a transport fault "
+                "from a capture one)\n");
   } else {
     std::printf("  - create a Mutter virtual monitor pinned to %dx%d at "
-                "%.1f Hz, with an embedded cursor\n",
+                "%.1f Hz, cursor embedded in the frames\n",
                 hashi::gnome::kTargetWidth, hashi::gnome::kTargetHeight,
                 hashi::gnome::kTargetRefresh);
     std::printf("  - capture it over PipeWire with:\n      %s\n",
                 hashi::capture::pipeline_description(0).c_str());
+    std::printf("  - pull a first frame BEFORE injecting anything, so the "
+                "stream has a consumer\n");
     std::printf("  - inject inbound type-7 records as pointer events\n");
   }
   std::printf("  - pace to %d fps, an interval of %u ms\n", config.fps,
               hashi::stream::frame_interval_ms(config.fps));
   if (config.skip_unchanged) {
     std::printf("  - skip frames identical to the last one sent, but re-send "
-                "one every %.1fs anyway, because what the device does with a "
+                "one every %.1fs regardless, because what the device does with a "
                 "silent stream has never been observed\n",
                 config.keepalive_s);
   } else {
@@ -156,6 +163,8 @@ int command_plan(const Config& config) {
   if (config.frames != 0) {
     std::printf("  - stop after %llu ticks\n",
                 static_cast<unsigned long long>(config.frames));
+  } else {
+    std::printf("  - run until interrupted with Ctrl-C\n");
   }
   std::printf("\nNothing was done. Add --allow-session to `run` to do it.\n");
   return 0;
