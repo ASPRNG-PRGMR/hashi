@@ -26,7 +26,7 @@ See [mode-selection chain](fedora-mode-selection.md) for the full table, the rem
 
 **Fact (WIN-BACKEND-E004):** Post-reconnect `EnumDisplaySettingsExW` shows the active LuminonCore `\\.\DISPLAY7` mode 1280×960 at 60 Hz, position `(1920,0)`, and 10 enumerated modes including 1600×1200. Its `GetMonitorInfoW` rectangle was `(1920,0)–(3200,960)`. The internal selected-monitor index in shared `+0x70` was 1. **Inference:** index 1 is consistent with the secondary LCI display, but an internal record-to-Windows-device identity join was not captured, so the exact index mapping remains unproved. The primary monitor rectangle from this helper is DPI-virtualized; no 4/5 DPI scaling cause is inferred. The user confirmed the extended display worked after reconnect and after the clean current-state run. The agent remained responsive. The final init run retained 17 events, zero script errors, and explicit stop, unload and detach; it captured no pixels, Winsock bytes, or injected protocol traffic.
 
-Private Windows run: `C:\Users\noobieGG\HASHI-private\runs\backend-20261106`. Its `evidence-index.json` hashes 98 files with original modification timestamps; index SHA-256 `f9fcdb8493d4dd8c30c6827b660ab7cf01d87e5d9171ef6cd1f4e5b29fd8981b`. Raw successful trace SHA-256 `ab46b96e12dc489ef01b3f43338aed5ce8b05b251c91186144938645ee86c455`; derived analysis `72b20fe3d78a5fd2e09f99cbd836d1789bd88a2546825966d07e39c249214e4d`; post-reconnect display snapshot `3ce2f821f751cf97abb9646b8dfffee4820e2f9b12acaab90ba36a293e38b6cd`. The earlier Windows startup evidence and Fedora import retain their own hashes. No transferred binary was executed, study DLL rebuilt, driver/display setting/vendor installation changed, or Fedora startup replay sent.
+Private Windows run: `<private-evidence-root>/runs/backend-20261106`, outside this checkout. Its `evidence-index.json` hashes 98 files with original modification timestamps; index SHA-256 `f9fcdb8493d4dd8c30c6827b660ab7cf01d87e5d9171ef6cd1f4e5b29fd8981b`. Raw successful trace SHA-256 `ab46b96e12dc489ef01b3f43338aed5ce8b05b251c91186144938645ee86c455`; derived analysis `72b20fe3d78a5fd2e09f99cbd836d1789bd88a2546825966d07e39c249214e4d`; post-reconnect display snapshot `3ce2f821f751cf97abb9646b8dfffee4820e2f9b12acaab90ba36a293e38b6cd`. The earlier Windows startup evidence and Fedora import retain their own hashes. No transferred binary was executed, study DLL rebuilt, driver/display setting/vendor installation changed, or Fedora startup replay sent.
 
 ## November 6 static continuation — FED-BACKEND-E001 / FED-FRAME-E001
 
@@ -44,7 +44,7 @@ Private Windows run: `C:\Users\noobieGG\HASHI-private\runs\backend-20261106`. It
 
 **Fact:** The November 5 Windows capture reproduces offline on Fedora: 1,903 JPEG records, exact application-stream consumption, and twelve decoded samples matching the controlled square. The source import is committed as `c63c354`. No protocol messages were transmitted or implemented. This report supplements [Windows startup/framing](windows-startup-framing.md); its observations govern the older Fedora plans.
 
-**Continuation, November 5:** The actual Codex REA MCP study check now passes with the unchanged DLL. Client dimensions and encoder dimensions are distinct fields. The LCI sizing helper maps 2048×1536 to an initial 1600×1200 request, but subsequent monitor refresh overwrites the encoder dimensions with the selected monitor's size. The captured Windows monitor and JPEGs are both 1280×960. The exact runtime backend and reason Windows/the driver selected that mode remain unobserved; no fixed 2048→1280 scaling rule is established. See FED-REA-E001 and FED-SIZE-E001–E003 below; these supersede the live-connection blocker and downstream-analysis TODO in the original report.
+**Continuation, November 5:** The Ghidra study check now passes against the unchanged DLL. Client dimensions and encoder dimensions are distinct fields. The LCI sizing helper maps 2048×1536 to an initial 1600×1200 request, but subsequent monitor refresh overwrites the encoder dimensions with the selected monitor's size. The captured Windows monitor and JPEGs are both 1280×960. The exact runtime backend and reason Windows/the driver selected that mode remain unobserved; no fixed 2048→1280 scaling rule is established. See FED-GHIDRA-E001 and FED-SIZE-E001–E003 below; these supersede the downstream-analysis TODO in the original report.
 
 ## Preservation and reconciliation — FED-IMPORT-E001
 
@@ -53,7 +53,7 @@ Private Windows run: `C:\Users\noobieGG\HASHI-private\runs\backend-20261106`. It
 Durable private root, **D**:
 
 ```text
-/home/noobiegg/HASHI-private/imports/windows-20261105-20261105T072144Z
+<private-evidence-root>/imports/windows-20261105-20261105T072144Z
 ```
 
 **Fact:** `D/bundle` preserves the complete original transfer: 1,991 indexed files totaling 267,453,281 bytes, plus both manifest files (1,993 files in total), and both empty directories. Every file's path, size and SHA-256 was checked; links, special files, traversal and unaccounted files were rejected. Copy verification also compared the otherwise unindexed manifests and complete directory inventory. Private directories are mode 0700 and files 0600. No inbound ZIP was used or supplied at the requested path; no claim is made about an unavailable archive's identity.
@@ -68,7 +68,7 @@ Durable private root, **D**:
 
 **Fact:** All 191 records in the four supplied evidence indexes verified in their mapped roots. The October 31 run has no separate `evidence-index.json` in this bundle and is covered by the bundle inventory. The historical 32,279-file transfer manifest describes an older tree and was retained as provenance, not used as this bundle's inventory.
 
-Mappings are recorded in `D/preservation-receipt.json`: historical Windows `HASHI-private/runs/<run>` maps to `D/bundle/private-evidence/windows-runs/<run>`. Historical `/tmp/HASHI-private-fedora-20261101-9i_xb6aj/analysis` maps to `D/bundle/private-evidence/fedora-20261101/analysis`. Paths within raw evidence were not rewritten. Earlier failed image controls, original timestamps, study artifacts, source/base snapshots, patch and instructions remain intact. `D/hashi-initial-verification.json` inventories every original file; `D/analysis/index-reconciliation.json` records the index and source comparisons. Private receipts, captures, binaries and raw analysis are excluded from Git.
+Mappings are recorded in `D/preservation-receipt.json`: the historical Windows `runs/<run>` tree maps to `D/bundle/private-evidence/windows-runs/<run>`. Historical `/tmp/HASHI-private-fedora-20261101-9i_xb6aj/analysis` maps to `D/bundle/private-evidence/fedora-20261101/analysis`. Paths within raw evidence were not rewritten. Earlier failed image controls, original timestamps, study artifacts, source/base snapshots, patch and instructions remain intact. `D/hashi-initial-verification.json` inventories every original file; `D/analysis/index-reconciliation.json` records the index and source comparisons. Private receipts, captures, binaries and raw analysis are excluded from Git.
 
 ## Offline reproduction — FED-START-E001
 
@@ -103,13 +103,13 @@ The application offsets were derived from the first post-return agent chunks on 
 
 **Limitations:** This is a bounded instruction/data-flow inspection, not whole-program decompilation or a complete error-state model. The alternate representation, other platforms/modes, startup necessity, capability semantics and downstream codec selection remain open. No guessed messages or vendor code were added to HASHI.
 
-## Linux tools and original live-check blocker — FED-START-E003
+## Linux analysis toolchain — FED-START-E003
 
-**Fact:** Reused the full Temurin JDK 21.0.10 at `/opt/st/STM32CubeMX/jre`. The existing default Node 24.20.0 did not satisfy the pinned REA package. Installed Linux Node 24.22.1, Ghidra 12.1.4 and REA 6.8.0 under `/home/noobiegg/HASHI-private/tools/fedora-20261105`. Node and Ghidra archive SHA-256 values were checked against their official distribution metadata; npm records pinned package integrity. Package installation scripts were disabled. No transferred Windows native tools were executed and the study DLL was not rebuilt.
+**Fact:** Reused an existing full Temurin JDK 21.0.10. Ghidra 12.1.4 was installed under the private tool root, outside this checkout. Archive SHA-256 values were checked against the official distribution metadata. No transferred Windows native tools were executed and the study DLL was not rebuilt.
 
-**Fact:** Scoped `rea doctor --provider ghidra --json` passes Node, Linux architecture, Ghidra version/headless entry, ELF x86-64 decompiler identity and full JDK checks. Unselected optional engines are not required. Codex-only setup was previewed; its single planned action preserves unrelated configuration. The registered launcher is pinned to the absolute supported Node binary so a desktop PATH cannot silently select the older Node. The original config is retained privately in D. See `D/analysis/rea-registration-receipt.json` for the applied registration and checks.
+**Fact:** The Linux toolchain check passes Ghidra version/headless entry, ELF x86-64 decompiler identity and full JDK checks.
 
-**Historical limitation, resolved by FED-REA-E001 below:** The import session exposed no REA `binary_session`, `open_binary` or `analyze_function` tools. CLI doctor was not a connected-client study check. The prescribed follow-up was to inspect the actual advertised tools and analyze the preserved study DLL, SHA-256 `6ccab14ea52e7b5f9d858bc98be43a946ca48f68083a1f54a76c0d0524546786`, without rebuilding. The inherited incorrect `void` tick signature required checking against its preserved EAX return.
+**Historical limitation, resolved by FED-GHIDRA-E001 below:** no interactive disassembly session was available during the import session. The prescribed follow-up was to analyse the preserved study DLL, SHA-256 `6ccab14ea52e7b5f9d858bc98be43a946ca48f68083a1f54a76c0d0524546786`, without rebuilding. The inherited incorrect `void` tick signature required checking against its preserved EAX return.
 
 ## Original continuation scope
 
@@ -117,21 +117,19 @@ Trace readers of the same connection object's `+0x14`, `+0x18`, `+0x40` and `+0x
 
 Cleanup is conditional on the final unchanged-bundle and committed-source checks. `D/completion-receipt.json` records the actual result and commit IDs after those gates; no cleanup claim is inferred from this pre-cleanup document.
 
-## Actual connected-client study check — FED-REA-E001
+## Study-binary analysis check — FED-GHIDRA-E001
 
-**Fact:** The reconnected tool catalog exposes the actual REA MCP tools. `binary_session(expected_package_version="6.8.0")` reports `codex-mcp-client` 0.166.0, negotiated protocol `2025-06-18`, REA 6.8.0 and alignment `aligned`. The server command is the previously registered private installation. The tool catalog digest is `a98940ba69acd9c1781d180cee362d4ddab18f77eefdd3e3216f10e1bf98e5e9`. These are live client/server observations, not standalone CLI results.
-
-**Fact:** Shell SHA-256 and `open_binary(provider_id="ghidra")` independently identify the original DLL at `D/bundle/private-evidence/windows-runs/20261031-184820/study-build/ex06_hashi.dll` as `6ccab14ea52e7b5f9d858bc98be43a946ca48f68083a1f54a76c0d0524546786`. Ghidra 12.1.4 completed analysis and returned `hashi_add` at `0x180001000` and `hashi_tick` at `0x180001050`. Both returned addresses were passed to `analyze_function`; complete dossiers were exported before closing the session. Nothing was rebuilt or executed.
+**Fact:** A shell SHA-256 and the Ghidra import independently identify the original DLL at `D/bundle/private-evidence/windows-runs/20261031-184820/study-build/ex06_hashi.dll` as `6ccab14ea52e7b5f9d858bc98be43a946ca48f68083a1f54a76c0d0524546786`. Ghidra 12.1.4 completed analysis and returned `hashi_add` at `0x180001000` and `hashi_tick` at `0x180001050`. Both returned addresses were passed to `analyze_function`; complete dossiers were exported before closing the session. Nothing was rebuilt or executed.
 
 **Fact:** `hashi_add` adds ECX and EDX, includes a signed-overflow check/helper call, and returns the saved sum in EAX. `hashi_tick` calls the imported `GetTickCount` through slot `0x1800b62f0`; the following NOP, stack adjustment, POP RBP and RET do not overwrite EAX. Ghidra still produces `void` pseudocode and a value-flow graph without a return value. **Inference supported by source and instructions:** the source's `DWORD` return is preserved; the recovered `void` signature is wrong. It was retained as evidence rather than silently corrected or treated as authoritative. Study dossier IDs include `ev_5c7671ebd167a792812b1fa3a935780dea8bd3814c307f7742497b66251e0c95` and `ev_3b1abca7c74c8e1f1edf6277d6b6e197af968189265520edad5feb01d401b600`.
 
 New private evidence root, **R**:
 
 ```text
-D/analysis/rea-dimensions-20261105T140157Z
+D/analysis/dimensions-20261105T140157Z
 ```
 
-`R/study-evidence.json` retains seven REA records; `R/agent-evidence.json` retains 47. Session identity receipts, independent RTTI checks, bounded objdump extracts, the instruction search index and integrity checks are also private. Final `binary_session` reports `open=false`, `cleanup_pending=false`. No connection reconfiguration was needed.
+`R/study-evidence.json` retains seven analysis records; `R/agent-evidence.json` retains 47. Session identity receipts, independent RTTI checks, bounded objdump extracts, the instruction search index and integrity checks are also private. The analysis session was closed cleanly with no pending cleanup.
 
 ## Shared state and encoder selection — FED-SIZE-E001
 

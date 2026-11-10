@@ -14,9 +14,9 @@ Updated 2026-11-04, Asia/Calcutta. Event times below are UTC. Read together with
 
 ## Current identity and runtime boundary
 
-New private run **S**: C:\Users\noobieGG\HASHI-private\runs\source-check-20261104-142811.
+New private run **S**: `<private-evidence-root>/runs/source-check-20261104-142811`, outside this checkout.
 
-**Fact:** Active workspace remains C:\Users\noobieGG\Downloads\hashi. Earlier working changes and the nested older workspace were preserved. No new source protocol implementation, vendor installation modification, driver installation, or pairing change was made.
+**Fact:** The active workspace is unchanged. Earlier working changes and the nested older workspace were preserved. No new source protocol implementation, vendor installation modification, driver installation, or pairing change was made.
 
 Installed binaries reverified against the November 3/Fedora artifacts:
 
@@ -70,7 +70,7 @@ Installed binaries reverified against the November 3/Fedora artifacts:
 
 **Fact:** Hooks were removed, the script unloaded and attachment detached at 09:00:38.403Z. No pending recorded calls or cleanup errors remained. The final sequential baseline at 14:31:23.637–14:31:28.234 +05:30 retained the agent, Apple/iPad/XDISPLAY devices and connection. This machine-state check is distinct from user visual confirmation; no new November 4 post-test visual confirmation was solicited.
 
-**Fact:** The actual Codex tool catalog still exposes no REA binary/session/function tools. The prior reviewed-shell doctor and aligned registration do not constitute a current live MCP call. No REA/Ghidra reinstall or study rebuild was performed. Runtime evidence here comes from Frida 17.23.2 Node bindings and local checks, not REA MCP.
+**Fact:** No Ghidra reinstall was performed for this run. Runtime evidence here comes from Frida 17.23.2 Node bindings and local checks rather than from static analysis.
 
 ## Evidence and next step
 
@@ -93,5 +93,3 @@ S\evidence-index.json maps all 40 verified records to these locally assigned IDs
 The focused transport/image question is answered for the observed build and configuration. Preserve the failed controls and both run roots when transferring evidence.
 
 **Next experiment, WIN-NEXT-02:** Establish the application startup exchange and framing at the now-proven boundary. Start from the existing November 3 connect trace and narrow static callers; identify which startup bytes are fully retained versus truncated prefixes. A new bounded reconnect capture may be needed to preserve complete successful bidirectional stream bytes. Reassemble by connection generation and direction, handle partial I/O, and correlate the observed port argument 6789 without assuming it is universal. Validate any candidate four-byte length/type interpretation against multiple actual buffers and instructions. Do not implement a guessed protocol, equate send calls with messages, or generalize these JPEG samples to every mode.
-
-**Separate setup task:** Reconnect/restart the affected Codex client, confirm actual REA tools appear, and perform the small Ghidra call on the transferred, hash-verified study DLL. Inspect launch errors if tools remain absent. Reinstallation and rebuilding are not the remedy for an aligned registration with an unconnected chat.

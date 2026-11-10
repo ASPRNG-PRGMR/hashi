@@ -1,19 +1,19 @@
 # Fedora investigation — 2026-11-01
 
-**Inference:** The copied agent has a concrete path from `usbmuxd_connect` to direct Winsock I/O on its returned socket. This makes the observed Apple loopback connection a strong session-transport candidate. It does **not** establish that the historical connection carried display data. The next runtime test is in [the Fedora handoff](fedora-next-steps.md).
+**Inference:** The copied agent has a concrete path from `usbmuxd_connect` to direct Winsock I/O on its returned socket. This makes the observed Apple loopback connection a strong session-transport candidate. It does **not** establish that the historical connection carried display data.
 
 ## Provenance and preservation — FED-E001
 
-**Fact:** The existing Git workspace is `/home/noobiegg/Documents/github-stuff/hashi`, at commit `24857f1` when inspected. Initially only `hashi-stuff/` was untracked; tracked files were clean. No remote was created or changed. The transfer contains `hashi-main/` and `HASHI-private/` as an **already extracted tree**.
+**Fact:** The existing Git workspace was at commit `24857f1` when inspected. Initially only the private transfer folder was untracked; tracked files were clean. No remote was created or changed. The transfer contains `hashi-main/` and `HASHI-private/` as an **already extracted tree**.
 
-**Fact:** No HASHI transfer archive was located in the transfer or searched home-directory archive filenames. `/home/noobiegg/Downloads/usb-stuff.zip` was inspected by its member list and contains unrelated material. The ZIP inside `HASHI-private/rea-bootstrap` is the Windows Zig distribution, not the workspace/evidence transfer. The user was asked whether the transfer archive was removed or stored elsewhere; no answer was available when this log was written. Consequently **no original transfer-archive SHA-256 or extraction verification can be claimed**.
+**Fact:** No HASHI transfer archive was located in the transfer or searched home-directory archive filenames. A `usb-stuff.zip` in the user's downloads was inspected by its member list and contains unrelated material. The ZIP inside `HASHI-private/rea-bootstrap` is the Windows Zig distribution, not the workspace/evidence transfer. The user was asked whether the transfer archive was removed or stored elsewhere; no answer was available when this log was written. Consequently **no original transfer-archive SHA-256 or extraction verification can be claimed**.
 
-**Fact:** All 32,279 supplied regular files (751,064,767 bytes) were hashed. A walk rejected symlinks and nonordinary entries before copying selected directories into new staging. Run evidence, the transferred workspace and the REA package were copied; staged workspace/run file hashes were compared with the originals. The original transfer was not modified. The study DLL was not rebuilt; Windows executables were not run as Fedora tools.
+**Fact:** All 32,279 supplied regular files (751,064,767 bytes) were hashed. A walk rejected symlinks and nonordinary entries before copying selected directories into new staging. Run evidence and the transferred workspace were copied; staged workspace/run file hashes were compared with the originals. The original transfer was not modified. The study DLL was not rebuilt; Windows executables were not run as Fedora tools.
 
 Private root, abbreviated **P** below:
 
 ```text
-/tmp/HASHI-private-fedora-20261101-9i_xb6aj
+/tmp/<private-staging-root>   # mode 0700, tmpfs, not durable
 ```
 
 | Record | SHA-256 |
@@ -25,9 +25,8 @@ Private root, abbreviated **P** below:
 
 | Historical Windows path | Fedora mapping |
 | --- | --- |
-| `C:\Users\noobieGG\Downloads\hashi-main` | `P/staging/hashi-main` |
-| `C:\Users\noobieGG\HASHI-private\runs\20261031-184820` | `P/staging/HASHI-private/runs/20261031-184820` (abbreviated **R**) |
-| `C:\Users\noobieGG\HASHI-private\tools\rea-6.8.0` | `P/tools/rea-6.8.0`; JavaScript diagnostics only |
+| Historical extracted workspace `hashi-main` | `P/staging/hashi-main` |
+| Private Windows run `runs/20261031-184820` | `P/staging/private-evidence/runs/20261031-184820` (abbreviated **R**) |
 | `C:\Program Files (x86)\Splashtop\Splashtop Wired XDisplay\Agent\SWXDAgent.exe` | `R/binaries/SWXDAgent.exe` |
 | Same vendor directory, `libusbmuxd.dll` | `R/binaries/libusbmuxd.dll` |
 | Windows Ghidra 12.1.2 / JDK 21.0.12 installations | Not present in the transferred tree; no Fedora equivalent installed by this session |
@@ -51,21 +50,18 @@ The complete machine-readable mapping is `P/path-mapping.json`. All five require
 | Tool | Fedora observation |
 | --- | --- |
 | OS / CPU | Fedora 44 Workstation, x86_64 |
-| Node / npm on PATH | Node `24.20.0`, npm `12.0.2`; another Codex-managed Node is `24.19.0` |
+| Node / npm on PATH | Node `24.20.0`, npm `12.0.2` |
 | Default Java | OpenJDK `25.0.4.1` runtime; no `javac` on PATH |
 | Reusable full JDK | Temurin `21.0.10+7-LTS`, both `java` and `javac`, `/opt/st/STM32CubeMX/jre`; STM32CubeIDE also contains this version |
 | Ghidra | No installation found in the inspected tool locations or transfer |
-| REA | Transferred package `6.8.0`; Linux Node can run its version and doctor commands |
 | TShark | `4.6.9`; `capinfos` available; no capture acquired |
 | Compilers / disassembler | GCC `16.2.1`, Clang `22.1.8`, GNU objdump `2.46.1-1.fc44`; no Zig on PATH |
 
-**Fact:** Installed REA's `engines.node` requires `^22.23.4 || ^24.22.1 || >=26.12.1`; both discovered Nodes fail it. `doctor --provider ghidra --json` exits 1 with unsupported Node and missing Ghidra. Scoped `setup --client codex --skill=false --dry-run` exits 1, reports `needs_human`, and lists **zero planned/applied actions**. This is prerequisite validation, not an applied configuration transaction. Existing Codex configuration remains unchanged; its hash is in `P/setup/config-state.json`.
+**Fact (primary documentation):** Ghidra [12.1.4 declares Java minimum/compiler 21](https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_12.1.4_build/Ghidra/application.properties); [12.2 declares 25](https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_12.2_build/Ghidra/application.properties). **Decision:** Prefer 12.1.4 with the existing full JDK 21 for this continuation, subject to checking the actual downloaded distribution and its Linux native decompiler. It is not described as the latest release.
 
-**Fact (primary documentation):** Ghidra [12.1.4 declares Java minimum/compiler 21](https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_12.1.4_build/Ghidra/application.properties); [12.2 declares 25](https://github.com/NationalSecurityAgency/ghidra/blob/Ghidra_12.2_build/Ghidra/application.properties). **Decision:** Prefer 12.1.4 with the existing full JDK 21 for this continuation, subject to checking the actual downloaded distribution and its Linux native decompiler. It is not described as the latest release. [REA installation requirements and scoped setup](https://github.com/morluto/rea/blob/main/docs/installation.md) were checked against the installed package.
+**Fact / blocker:** Terminal HTTPS acquisition failed before download: `curl` exit 6, unable to resolve `nodejs.org`. A compatible Ghidra build was therefore not acquired, so no interactive disassembly was available in this session.
 
-**Fact / blocker:** Terminal HTTPS acquisition failed before download: `curl` exit 6, unable to resolve `nodejs.org`. Compatible Node and Ghidra were therefore not acquired. User-level Codex config is also outside this session's write roots. The current Codex tool catalog exposes **no REA tools**, and the user config contains no MCP registrations. An independent stdio schema attempt closed before initialization (`CONNECTION_CLOSED`); its cause was not established. A CLI version response is not MCP verification.
-
-**Fact:** The transferred Windows `tools/list` schemas were inspected for `open_binary`, `binary_session`, `search_procedures`, `analyze_function`, `export_evidence_bundle`, and `close_binary`. Their provenance is explicitly retained in `P/setup/inherited-selected-tool-schemas.json`. No live Fedora schema discovery, Ghidra opening, new Ghidra pseudocode, or connected-client study check succeeded. No native analysis session was opened, so none remained to close. [Official Codex MCP configuration](https://learn.chatgpt.com/docs/extend/mcp?surface=cli) confirms the configuration and reconnect workflow; the remaining steps are in the handoff.
+**Fact:** No Fedora-side Ghidra import or new pseudocode was produced in this session. No native analysis session was opened, so none remained to close.
 
 ## Independent study check — FED-E003
 
@@ -105,6 +101,6 @@ All addresses below are **static preferred-image VAs** unless explicitly marked 
 
 ## State at handoff
 
-**Fact:** No application payload was captured, no Windows process was attached, and no Linux host/protocol implementation was started. The archive-provenance gap, compatible Node/Ghidra installation, Codex registration and actual MCP study check remain open. Static findings provide specific call sites and a controlled Windows experiment, rather than a recovered protocol. [Next-session instructions](fedora-next-steps.md) separate these setup tasks from the physical-iPad observation.
+**Fact:** No application payload was captured, no Windows process was attached, and no Linux host/protocol implementation was started. The archive-provenance gap and a working Fedora-side Ghidra installation remain open. Static findings provide specific call sites and a controlled Windows experiment, rather than a recovered protocol.
 
 **Fact — return-transfer packaging:** At the user's subsequent request to transfer this directory back to Windows, 37 Fedora evidence/diagnostic files were bundled into the existing Git-ignored private transfer area as `hashi-stuff/FEDORA-private-20261101.zip`. Archive CRC and every member's SHA-256 were verified against the private originals. SHA-256: `900a096b2efd0b29667790bc35b28d6fce1ba9c936189b273205e45c912ba9f2`. This new transfer bundle preserves the selected outputs beyond `/tmp`; it is not the missing original inbound archive. `RETURN-TO-WINDOWS.md` defined the Windows continuation and the private evidence mapping; it was removed on 2026-11-08. The bundle and vendor artifacts are excluded from Git.

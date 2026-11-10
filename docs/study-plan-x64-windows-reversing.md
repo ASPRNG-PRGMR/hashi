@@ -5,7 +5,8 @@
 **Goal:** Enough x64 and Windows literacy to open `lci_iddcx.dll` in Ghidra and read it with confidence, and to read `lci_proxywddm.sys` and the Splashtop host agent later.
 **Not the goal:** general exploit development, malware analysis, or kernel internals beyond what these three binaries need.
 
-Hands-on material lives in [`../study/`](../study/) (C sources, Makefile, per-exercise notes).
+The hands-on exercise sources that accompanied this plan are not distributed with the
+repository; the plan below describes them well enough to recreate them.
 
 ---
 
@@ -73,7 +74,7 @@ Environment check (already verified on this Fedora box on 2026-10-14): `gcc` 16,
 
 **Do**
 1. Download Ghidra 12.1.4 from the GitHub releases page (`NationalSecurityAgency/ghidra`), unzip under `~/opt/`, run `ghidraRun`. Create a project `hashi-study`.
-2. `cd study/week1 && make` builds every exercise four ways: Linux `-O0`, Linux `-O2`, Windows `-O0`, Windows `-O2`, all with debug info, into `build/`. `make asm` emits Intel-syntax `.s` files.
+2. Build every exercise four ways — Linux `-O0`, Linux `-O2`, Windows `-O0`, Windows `-O2`, all with debug info. Also emit Intel-syntax `.s` files for side-by-side reading.
 3. Open `build/ex01_basics.s.linux-O0` in a text editor and `build/ex01_basics.linux-O0` in Ghidra. Read `add3` and `main`.
 
 **Learn** (from the Intel/AMD manuals or any x64 video, then confirm in your output)

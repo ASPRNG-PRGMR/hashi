@@ -24,7 +24,7 @@ Read [Windows return investigation](windows-return-investigation.md) for Evidenc
 
 Notes updated 2026-11-01 for the 2026-10-31 Windows experiment: process/device/endpoint evidence includes one cable disconnect/reconnect cycle. No USB or application payload capture, message framing, codec, encryption, or iPad application endpoint has been established. Follow `WINDOWS-CODEX-HANDOFF.md` when older project notes conflict.
 
-Private run: `C:\Users\noobieGG\HASHI-private\runs\20261031-184820`. Binary identities and component roles are recorded in `docs/windows-components.md`. All times below are Asia/Calcutta, UTC+05:30. These findings use PowerShell 7.6.5 and Windows CIM/network queries, not REA decompilation.
+Private run: `<private-evidence-root>/runs/20261031-184820`, outside this checkout. Binary identities and component roles are recorded in `docs/windows-components.md`. All times below are Asia/Calcutta, UTC+05:30. These findings use PowerShell 7.6.5 and Windows CIM/network queries, not decompilation.
 
 ## WIN-OBS-001: observed host communication boundary
 

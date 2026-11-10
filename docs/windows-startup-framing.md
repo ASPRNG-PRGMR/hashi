@@ -16,9 +16,9 @@ The Windows capture work planned for this transfer is complete. Fedora can now p
 
 ## Identity, connection and scope
 
-Private run **T**: C:\Users\noobieGG\HASHI-private\runs\startup-20261105-103819.
+Private run **T**: `<private-evidence-root>/runs/startup-20261105-103819`, outside this checkout.
 
-Evidence IDs WIN-START-E001–E005 are local investigation identifiers, not REA MCP ev_ records. REA tools remained absent from this chat; the observation used the existing Frida 17.23.2 Node binding, PowerShell/.NET screen checks and independent analysis scripts. No Ghidra/REA reinstall, study rebuild, driver or pairing change was performed.
+Evidence IDs WIN-START-E001–E005 are local investigation identifiers. The observation used the existing Frida 17.23.2 Node binding, PowerShell/.NET screen checks and independent analysis scripts. No Ghidra reinstall, driver or pairing change was performed.
 
 **Fact:** User-selected SWXDAgent PID 22412 was running before attachment; the iPad/XDISPLAY device entries and agent Apple socket were absent. Installed hashes matched the studied artifacts:
 
@@ -106,4 +106,4 @@ Selected white payloads were 26,568 bytes; selected black payloads were 26,408 b
 
 Use the prepared private transfer bundle and its import instructions. Verify hashes before merging, retain a durable private copy outside the existing repository, and preserve that repository's history and edits. Carry all four Windows run directories and the Fedora static evidence forward; no Windows node_modules or native tool installation is needed on Fedora merely to read evidence.
 
-Reproduce the observed record parsing offline. Inspect the few startup routines to identify field semantics, mixed-endian fields and validation/error behavior. Keep facts separate from hypotheses; avoid treating one successful exchange as a universal handshake. A small live REA/Ghidra study check can be completed on Fedora using the unchanged study DLL once Linux prerequisites and the actual MCP connection are verified. No further Windows cable action is required for this transfer's planned capture work.
+Reproduce the observed record parsing offline. Inspect the few startup routines to identify field semantics, mixed-endian fields and validation/error behavior. Keep facts separate from hypotheses; avoid treating one successful exchange as a universal handshake. No further Windows cable action is required for this transfer's planned capture work.
