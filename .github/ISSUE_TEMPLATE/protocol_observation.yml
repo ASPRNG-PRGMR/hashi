@@ -1,0 +1,60 @@
+name: Protocol observation
+description: You observed protocol behaviour that is undocumented or contradicts a documented claim
+labels: ["protocol", "evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most valuable kind of report this project can receive.
+
+        Several protocol paths are **decoded but never observed**: multi-touch,
+        keyboard, Apple Pencil, display reconfiguration, the TLV `0x70` subtype,
+        differential JPEG, and `field0` values other than 5, 6 and 10. Evidence
+        for any of those turns an Inference into a Fact.
+
+        **Do not attach raw captures to a public issue.** Describe what you saw;
+        we will arrange a private channel for the bytes if needed.
+
+  - type: textarea
+    id: observation
+    attributes:
+      label: What you observed
+      description: The behaviour, and the field or message it concerns.
+    validations:
+      required: true
+
+  - type: textarea
+    id: how
+    attributes:
+      label: How it was observed
+      description: |
+        What produced the observation — a live run, a capture, static analysis?
+        What would someone else have to do to see the same thing?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: classification
+    attributes:
+      label: How would you classify this
+      description: See the evidence discipline in the README.
+      options:
+        - Fact — directly observed, or in official documentation
+        - Inference — a logical conclusion from observed evidence
+        - Hypothesis — plausible, awaiting confirmation
+    validations:
+      required: true
+
+  - type: textarea
+    id: contradicts
+    attributes:
+      label: Does this contradict an existing claim?
+      description: If so, link the document and quote the line.
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and software
+      description: iPad model, iPadOS version, Splashtop app version, host details.
+    validations:
+      required: true

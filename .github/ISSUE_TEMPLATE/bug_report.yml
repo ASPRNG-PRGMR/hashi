@@ -1,0 +1,77 @@
+name: Bug report
+description: Something behaved differently from what the documentation says
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please check [Known issues](https://github.com/ASPRNG-PRGMR/hashi#known-issues)
+        first — several limitations are deliberate and already documented.
+
+        **Do not attach raw USB captures, pairing records or frame dumps to a
+        public issue.** Say you have one and we will arrange a private channel.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, and what you observed instead of what you expected.
+      placeholder: |
+        I ran `./hashi.sh run --allow-session` and ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The full command output, including any traceback.
+      render: shell
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which implementation
+      options:
+        - Python host (./hashi.sh run)
+        - Native C++ binary (./hashi.sh native-run)
+        - Rust core
+        - Offline checks only (./hashi.sh check)
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: |
+        Please run and paste:
+        `./hashi.sh plan`, plus your distribution, GNOME/Mutter version,
+        session type (`echo $XDG_SESSION_TYPE`), Python version, iPad model,
+        iPadOS version and Splashtop Wired XDisplay app version.
+      render: shell
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I am on a Wayland session with GNOME/Mutter (the only supported compositor)
+          required: true
+        - label: "`./hashi.sh check` passes on my machine"
+        - label: I have not attached any raw capture, pairing record or vendor binary
+          required: true
