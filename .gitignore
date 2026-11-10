@@ -1,14 +1,39 @@
-study/**/build/
-
-# Transferred private Windows evidence; never stage its contents.
+# ---------------------------------------------------------------------------
+# Private research material — never stage any of this.
+# ---------------------------------------------------------------------------
+# Raw captures, pairing records, vendor binaries and evidence bundles live
+# outside this checkout. These rules are a second line of defence.
 /hashi-stuff/
+/HASHI-private/
+*.pcap
+*.pcapng
+*.etl
 
+# Personal learning exercises and their build products. Not part of the
+# project; kept locally while the x64/Windows study notes in
+# docs/study-plan-x64-windows-reversing.md are being worked through.
+/study/
+
+# ---------------------------------------------------------------------------
+# Build trees and caches
+# ---------------------------------------------------------------------------
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
 
-# C++ build trees
+# C++ (CMake)
 native/build/
 build/
 
-# Rust build tree
+# Rust
 rust/target/
+
+# ---------------------------------------------------------------------------
+# Editor and OS cruft
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+.DS_Store
